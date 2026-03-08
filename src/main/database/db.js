@@ -163,20 +163,25 @@ function createCategory(d) {
 
 function deleteCategory(id) {
   // Check if ANY product (active or inactive) uses this category
-  const count = db
-    .prepare('SELECT COUNT(*) as c FROM products WHERE category_id=?')
-    .get(id).c;
+const tx = db.transaction((categoryId) => {
+    // Block deletion only if active products are still assigned.
+    const activeCount = db
+      .prepare('SELECT COUNT(*) as c FROM products WHERE category_id=? AND active=1')
+      .get(categoryId).c;
 
-  if (count > 0) {
-    // Prevent SQLite foreign key error
-    throw new Error(
-      `Cannot delete — ${count} product(s) still use this category`
-    );
-  }
+    if (activeCount > 0) {
+      throw new Error(`Cannot delete — ${activeCount} active product(s) still use this category`);
+    }
+
+    // Detach inactive products so FK constraints allow category removal.
+    db.prepare('UPDATE products SET category_id=NULL WHERE category_id=? AND active=0').run(categoryId);
+
+    db.prepare('DELETE FROM categories WHERE id=?').run(categoryId);
+    return { success: true };
+  });
 
   // Safe to delete
-  db.prepare('DELETE FROM categories WHERE id=?').run(id);
-  return { success: true };
+  return tx(id);
 }
 
 // ─── STAFF ────────────────────────────────────────────────────────────────────

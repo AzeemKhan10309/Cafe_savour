@@ -6,7 +6,7 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'bundle.js',
-    publicPath: '/',
+    publicPath: './',
   },
   // Use 'web' target - renderer runs in Chromium context, not Node
   target: 'web',

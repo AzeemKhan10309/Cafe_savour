@@ -28,8 +28,7 @@ function createWindow() {
   });
 
   const devURL = 'http://localhost:3000';
-  const prodURL = `file://${path.join(__dirname, '../../dist/index.html')}`;
-
+  const prodIndexPath = path.join(__dirname, '../..', 'dist', 'index.html');
   if (isDev) {
     // In dev mode, retry loading until webpack-dev-server is ready
     const tryLoad = () => {
@@ -45,8 +44,8 @@ function createWindow() {
       }
     }, 3000);
   } else {
-    mainWindow.loadURL(prodURL);
-  }
+    mainWindow.loadFile(prodIndexPath);
+    }
 
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDesc) => {
     if (isDev) {
@@ -56,7 +55,8 @@ function createWindow() {
           mainWindow.loadURL(devURL).catch(() => {});
         }
       }, 2000);
-    }
+    } else {
+      console.error('Production page load failed:', { errorCode, errorDesc, prodIndexPath });    }
   });
 }
 

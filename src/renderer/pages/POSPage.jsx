@@ -37,6 +37,7 @@ export default function POSPage() {
   const [categories,    setCategories]   = useState([]);
   const [cart,          setCart]         = useState([]);
   const [activeCat,     setActiveCat]    = useState('all');
+   const [vatRate,       setVatRate]      = useState('0');
   const [search,        setSearch]       = useState('');
   const [discount,      setDiscount]     = useState({ value:'', type:'flat' });
   const [payMethod,     setPayMethod]    = useState('cash');
@@ -82,7 +83,9 @@ export default function POSPage() {
     if (discount.type==='percent') return Math.min(subtotal*v/100, subtotal);
     return Math.min(v, subtotal);
   })();
-  const total  = subtotal - discountAmount;
+   const taxableTotal = subtotal - discountAmount;
+  const taxAmount = taxableTotal * ((parseFloat(vatRate) || 0) / 100);
+  const total  = taxableTotal + taxAmount;
   const change = payMethod==='cash' ? (parseFloat(cashGiven)||0)-total : 0;
 
   const checkout = async () => {
@@ -98,8 +101,8 @@ export default function POSPage() {
       const r = await window.api.createOrder({
         invoice_number:invoiceNo, staff_id:user.id,
         subtotal, discount:parseFloat(discount.value)||0, discount_type:discount.type,
-        tax_rate:0, tax_amount:0, total,
-        payment_method:payMethod,
+        tax_rate:parseFloat(vatRate)||0, tax_amount:taxAmount, total,
+         payment_method:payMethod,
         payment_details: payMethod==='split' ? splitAmt : (payMethod==='cash' ? {cash:cashGiven} : {}),
         notes, items:cart,
       });
@@ -108,7 +111,7 @@ export default function POSPage() {
       await window.api.printReceipt({
         cafe:CAFE, invoice:invoiceNo, items:cart,
         subtotal, discount:parseFloat(discount.value)||0, discountAmount, discountType:discount.type,
-        taxRate:0, taxAmount:0, total,
+        taxRate:parseFloat(vatRate)||0, taxAmount, total, 
         paymentMethod:payMethod, paymentDetails: payMethod==='split'?splitAmt:{},
         cashGiven:parseFloat(cashGiven)||0, staffName:user.name,
         date:new Date().toLocaleString('en-PK'),
@@ -210,10 +213,19 @@ export default function POSPage() {
             </select>
             <input className="input" type="number" placeholder="Discount" value={discount.value} onChange={e=>setDiscount(p=>({...p,value:e.target.value}))} style={{ flex:1, fontSize:12 }} />
           </div>
+                    <div style={{ display:'flex', gap:7 }}>
+            <label style={{ fontSize:12, color:'var(--text-muted)', alignSelf:'center', minWidth:58 }}>VAT Tax</label>
+            <select className="input" value={vatRate} onChange={e=>setVatRate(e.target.value)} style={{ flex:1, fontSize:12 }}>
+              <option value="0">No VAT</option>
+              <option value="5">VAT 5%</option>
+              <option value="15">VAT 15%</option>
+            </select>
+          </div>
           <input className="input" placeholder="Order notes…" value={notes} onChange={e=>setNotes(e.target.value)} style={{ fontSize:12 }} />
           <div style={{ background:'var(--bg)', borderRadius:10, padding:12 }}>
             <TRow label="Subtotal" value={subtotal} />
             {discountAmount>0 && <TRow label={`Discount${discount.type==='percent'?` (${discount.value}%)`:''}` } value={-discountAmount} color="var(--success)" />}
+            {taxAmount>0 && <TRow label={`VAT (${vatRate}%)`} value={taxAmount} color="#F59E0B" />}
             <div style={{ borderTop:'1px solid var(--border)', paddingTop:7, marginTop:5 }}>
               <TRow label="TOTAL" value={total} bold large />
             </div>
@@ -301,6 +313,7 @@ export default function POSPage() {
           <div style={{ background:'var(--bg)', borderRadius:10, padding:12, marginBottom:18 }}>
             <TRow label="Subtotal" value={subtotal} />
             {discountAmount>0 && <TRow label="Discount" value={-discountAmount} color="var(--success)" />}
+           {taxAmount>0 && <TRow label={`VAT (${vatRate}%)`} value={taxAmount} color="#F59E0B" />}
             <div style={{ borderTop:'1px solid var(--border)', paddingTop:7, marginTop:7 }}>
               <TRow label="TOTAL DUE" value={total} bold large />
             </div>
