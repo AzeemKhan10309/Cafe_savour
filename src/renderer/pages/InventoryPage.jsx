@@ -149,7 +149,19 @@ export default function InventoryPage() {
 
   const deleteProduct = async id => {
     if (!confirm('Delete this product?')) return;
-    await window.api.deleteProduct(id); showToast('Product deleted','info'); load();
+    try {
+      const result = await window.api.deleteProduct(id);
+      if (result?.success === false) {
+        showToast(result.message || 'Failed to delete product', 'error');
+        return;
+      }
+
+      showToast('Product deleted', 'info');
+      await load();
+    } catch (err) {
+      console.error(err);
+      showToast(err.message || 'Failed to delete product', 'error');
+    }
   };
 
   const saveCategory = async data => {
@@ -188,6 +200,13 @@ const deleteCategory = async (cat) => {
     return { label:'In stock', color:'var(--success)', bg:'rgba(16,185,129,.2)' };
   };
 
+  const inventoryValue = products.reduce((sum, p) => {
+    const stock = Number(p.stock) || 0;
+    const cost = Number(p.cost) || 0;
+    const price = Number(p.price) || 0;
+    const unitValue = cost > 0 ? cost : price;
+    return sum + Math.max(0, stock) * Math.max(0, unitValue);
+  }, 0);
   // ── render ──
   return (
     <div style={{ height:'100%', overflow:'auto', padding:24, display:'flex', flexDirection:'column', gap:20 }}>
@@ -216,7 +235,7 @@ const deleteCategory = async (cat) => {
           { icon:'📦', label:'Total Products',  val: products.length },
           { icon:'⚠️', label:'Low Stock',        val: products.filter(p=>p.stock>0&&p.stock<=p.low_stock_threshold).length },
           { icon:'🚫', label:'Out of Stock',     val: products.filter(p=>p.stock===0).length },
-          { icon:'💰', label:'Inventory Value',  val: fmt(products.reduce((s,p)=>s+p.stock*p.cost,0)) },
+          { icon:'💰', label:'Inventory Value',  val: fmt(inventoryValue) },
         ].map(s=>(
           <div key={s.label} className="card" style={{ padding:14, display:'flex', alignItems:'center', gap:12 }}>
             <span style={{ fontSize:22 }}>{s.icon}</span>
@@ -289,62 +308,64 @@ const deleteCategory = async (cat) => {
       <input className="input" placeholder="🔍 Search products…" value={search} onChange={e=>setSearch(e.target.value)} style={{ maxWidth:340 }} />
 
       {/* ── Products table ── */}
-      <div className="card" style={{ padding:0, overflow:'hidden' }}>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Product</th>
-              <th>Category</th>
-              <th>Price</th>
-              {isAdmin && <th>Cost</th>}
-              {isAdmin && <th>Margin</th>}
-              <th>Stock</th>
-              <th>Status</th>
-              {isAdmin && <th>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(p => {
-              const badge  = stockBadge(p);
-              const margin = p.price>0 ? ((p.price-p.cost)/p.price*100).toFixed(0) : 0;
-              return (
-                <tr key={p.id}>
-                  <td>
-                    <div style={{ fontWeight:600 }}>{p.name}</div>
-                    {p.description && <div style={{ fontSize:11, color:'var(--text-dim)', marginTop:2 }}>{p.description}</div>}
-                  </td>
-                  <td>
-                    <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12 }}>
-                      <span style={{ width:8, height:8, borderRadius:'50%', background:p.category_color, flexShrink:0 }} />
-                      {p.category_name}
-                    </span>
-                  </td>
-                  <td><span style={{ fontFamily:'monospace', fontWeight:700 }}>{fmt(p.price)}</span></td>
-                  {isAdmin && <td><span style={{ fontFamily:'monospace', color:'var(--text-muted)' }}>{fmt(p.cost)}</span></td>}
-                  {isAdmin && (
+      <div className="card" style={{ padding:0, overflow:'hidden', display:'flex', flexDirection:'column', flex:1, minHeight:260 }}>
+        <div style={{ overflow:'auto', minHeight:0 }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Price</th>
+                {isAdmin && <th>Cost</th>}
+                {isAdmin && <th>Margin</th>}
+                <th>Stock</th>
+                <th>Status</th>
+                {isAdmin && <th>Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(p => {
+                const badge  = stockBadge(p);
+                const margin = p.price>0 ? ((p.price-p.cost)/p.price*100).toFixed(0) : 0;
+                return (
+                  <tr key={p.id}>
                     <td>
-                      <span style={{ color: margin>50?'var(--success)':margin>30?'var(--warning)':'var(--danger)', fontWeight:600 }}>{margin}%</span>
+                      <div style={{ fontWeight:600 }}>{p.name}</div>
+                      {p.description && <div style={{ fontSize:11, color:'var(--text-dim)', marginTop:2 }}>{p.description}</div>}
                     </td>
-                  )}
-                  <td><span style={{ fontFamily:'monospace', fontWeight:700 }}>{p.stock}</span></td>
-                  <td>
-                    <span style={{ display:'inline-flex', padding:'3px 10px', borderRadius:100, fontSize:11, fontWeight:600, background:badge.bg, color:badge.color }}>
-                      {badge.label}
-                    </span>
-                  </td>
-                  {isAdmin && (
                     <td>
-                      <div style={{ display:'flex', gap:6 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => { setEditProd(p); setShowAddProd(true); }}>Edit</button>
-                        <button className="btn btn-sm" onClick={() => deleteProduct(p.id)} style={{ background:'rgba(239,68,68,.15)', color:'var(--danger)', border:'none' }}>Del</button>
-                      </div>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:12 }}>
+                        <span style={{ width:8, height:8, borderRadius:'50%', background:p.category_color, flexShrink:0 }} />
+                        {p.category_name}
+                      </span>
                     </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    <td><span style={{ fontFamily:'monospace', fontWeight:700 }}>{fmt(p.price)}</span></td>
+                    {isAdmin && <td><span style={{ fontFamily:'monospace', color:'var(--text-muted)' }}>{fmt(p.cost)}</span></td>}
+                    {isAdmin && (
+                      <td>
+                        <span style={{ color: margin>50?'var(--success)':margin>30?'var(--warning)':'var(--danger)', fontWeight:600 }}>{margin}%</span>
+                      </td>
+                    )}
+                    <td><span style={{ fontFamily:'monospace', fontWeight:700 }}>{p.stock}</span></td>
+                    <td>
+                      <span style={{ display:'inline-flex', padding:'3px 10px', borderRadius:100, fontSize:11, fontWeight:600, background:badge.bg, color:badge.color }}>
+                        {badge.label}
+                      </span>
+                    </td>
+                    {isAdmin && (
+                      <td>
+                        <div style={{ display:'flex', gap:6 }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => { setEditProd(p); setShowAddProd(true); }}>Edit</button>
+                          <button className="btn btn-sm" onClick={() => deleteProduct(p.id)} style={{ background:'rgba(239,68,68,.15)', color:'var(--danger)', border:'none' }}>Del</button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         {filtered.length===0 && <div style={{ textAlign:'center', padding:48, color:'var(--text-dim)' }}>No products found</div>}
       </div>
 

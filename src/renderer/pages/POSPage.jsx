@@ -1,8 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../App';
 
-const CAFE = { name:'Saudi Saver House', address:'Main Boulevard, Lahore, Pakistan', phone:'+92 300 0000000', footer:'Thank you for visiting Saudi Saver House!' };
+const CAFE = { name:'Saudi Saver House', address:'Main Boulevard, Lahore, Pakistan', phone:'+92 346 6262146', footer:'Thank you for visiting Saudi Saver House!' };
 const fmt  = v => `Rs. ${Number(v||0).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
+
+// ── Smart Icon Function (Offline, Instant) ──
+function getIcon(name = '') {
+  const n = name.toLowerCase();
+
+  // ── Main Items ──
+  if (/karahi/.test(n) && /white/.test(n))         return '🍛'; // White Karahi
+  if (/karahi/.test(n))                             return '🍗'; // Chicken Karahi
+  if (/biryani/.test(n))                            return '🍚'; // Chicken Biryani
+  if (/seekh|kabab|kebab/.test(n))                  return '🍢'; // Seekh Kabab
+  if (/daal|dal/.test(n))                           return '🫕'; // Daal Mash
+
+  // ── Qeema Items ──
+  if (/qeema|kema/.test(n))                         return '🥩'; // Chicken Qeema
+
+  // ── Handi Items ──
+  if (/handi/.test(n) && /mutton/.test(n))          return '🍖'; // Mutton Handi
+  if (/handi/.test(n))                              return '🫕'; // Chicken Handi / Extra Handi
+
+  // ── Side Items ──
+  if (/raita/.test(n))                              return '🥛'; // Raita
+  if (/salad/.test(n))                              return '🥗'; // Green Salad
+  if (/soft drink|soda|cola|pepsi|coke|sprite|7up|fanta|dew|sting/.test(n)) return '🥤'; // Soft Drink
+  if (/kheera|cucumber/.test(n))                    return '🥒'; // Kheera
+
+  // ── Drinks (extra) ──
+  if (/chai|tea|kahwa/.test(n))                     return '🍵';
+  if (/lassi/.test(n))                              return '🥛';
+  if (/juice/.test(n))                              return '🧃';
+  if (/water|pani/.test(n))                         return '💧';
+  if (/shake|smoothie/.test(n))                     return '🥤';
+
+  // ── Bread ──
+  if (/naan|roti|paratha/.test(n))                  return '🫓';
+
+  // ── Default ──
+  return '🍽️';
+}
 
 function TRow({ label, value, bold, large, color }) {
   return (
@@ -37,9 +75,10 @@ export default function POSPage() {
   const [categories,    setCategories]   = useState([]);
   const [cart,          setCart]         = useState([]);
   const [activeCat,     setActiveCat]    = useState('all');
-   const [vatRate,       setVatRate]      = useState('0');
   const [search,        setSearch]       = useState('');
   const [discount,      setDiscount]     = useState({ value:'', type:'flat' });
+  const [serviceRate,   setServiceRate]  = useState(0);
+  const [vatRate,       setVatRate]      = useState('0');
   const [payMethod,     setPayMethod]    = useState('cash');
   const [splitAmt,      setSplitAmt]     = useState({ cash:'', card:'', qr:'' });
   const [cashGiven,     setCashGiven]    = useState('');
@@ -74,7 +113,10 @@ export default function POSPage() {
     return {...i, quantity:q, subtotal:q*i.price};
   }).filter(i=>i.quantity>0));
 
-  const clearCart = () => { setCart([]); setDiscount({value:'',type:'flat'}); setCashGiven(''); setNotes(''); setSplitAmt({cash:'',card:'',qr:''}); };
+  const clearCart = () => {
+    setCart([]); setDiscount({value:'',type:'flat'}); setServiceRate(0);
+    setVatRate('0'); setCashGiven(''); setNotes(''); setSplitAmt({cash:'',card:'',qr:''});
+  };
 
   // Calculations
   const subtotal       = cart.reduce((s,i)=>s+i.subtotal,0);
@@ -83,10 +125,11 @@ export default function POSPage() {
     if (discount.type==='percent') return Math.min(subtotal*v/100, subtotal);
     return Math.min(v, subtotal);
   })();
-   const taxableTotal = subtotal - discountAmount;
-  const taxAmount = taxableTotal * ((parseFloat(vatRate) || 0) / 100);
-  const total  = taxableTotal + taxAmount;
-  const change = payMethod==='cash' ? (parseFloat(cashGiven)||0)-total : 0;
+  const taxableBase    = Math.max(0, subtotal - discountAmount);
+  const serviceAmount  = (taxableBase * serviceRate) / 100;
+  const taxAmount      = (taxableBase * (parseFloat(vatRate)||0)) / 100;
+  const total          = taxableBase + serviceAmount + taxAmount;
+  const change         = payMethod==='cash' ? (parseFloat(cashGiven)||0)-total : 0;
 
   const checkout = async () => {
     if (!cart.length) return showToast('Cart is empty','error');
@@ -101,23 +144,35 @@ export default function POSPage() {
       const r = await window.api.createOrder({
         invoice_number:invoiceNo, staff_id:user.id,
         subtotal, discount:parseFloat(discount.value)||0, discount_type:discount.type,
-        tax_rate:parseFloat(vatRate)||0, tax_amount:taxAmount, total,
-         payment_method:payMethod,
+        tax_rate:parseFloat(vatRate)||0, tax_amount:taxAmount,
+        service_rate:serviceRate, service_amount:serviceAmount,
+        total,
+        payment_method:payMethod,
         payment_details: payMethod==='split' ? splitAmt : (payMethod==='cash' ? {cash:cashGiven} : {}),
         notes, items:cart,
       });
       if (!r.success) throw new Error('Order failed');
 
-      await window.api.printReceipt({
+      const printResult = await window.api.printReceipt({
         cafe:CAFE, invoice:invoiceNo, items:cart,
         subtotal, discount:parseFloat(discount.value)||0, discountAmount, discountType:discount.type,
-        taxRate:parseFloat(vatRate)||0, taxAmount, total, 
+        taxRate:parseFloat(vatRate)||0, taxAmount,
+        serviceRate, serviceAmount,
+        total,
         paymentMethod:payMethod, paymentDetails: payMethod==='split'?splitAmt:{},
         cashGiven:parseFloat(cashGiven)||0, staffName:user.name,
         date:new Date().toLocaleString('en-PK'),
       });
 
-      showToast(`✅ Order ${invoiceNo} complete!`);
+      const printedOnDevice     = printResult?.success && !printResult?.simulated;
+      const printedInSimulation = printResult?.success &&  printResult?.simulated;
+      const printFailed         = printResult && !printResult.success;
+
+      if (printedOnDevice)          showToast(`✅ Order ${invoiceNo} complete & printed!`);
+      else if (printedInSimulation) showToast(`✅ Order ${invoiceNo} complete (printer simulation mode)`);
+      else if (printFailed)         showToast(`⚠️ Order saved but receipt print failed: ${printResult.message || 'Unknown printer error'}`, 'error');
+      else                          showToast(`✅ Order ${invoiceNo} complete!`);
+
       clearCart(); setShowCheckout(false);
       setInvoiceNo(await window.api.getNextInvoiceNumber());
     } catch(e) { showToast(e.message||'Checkout failed','error'); }
@@ -156,8 +211,8 @@ export default function POSPage() {
                 onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform='none';}}
               >
                 <div style={{ position:'absolute', top:0, left:0, right:0, height:3, background:p.category_color||'var(--primary)' }} />
-                <div style={{ fontSize:24 }}>☕</div>
-                <div style={{ fontWeight:600, fontSize:12, lineHeight:1.3 }}>{p.name}</div>
+                <div style={{ fontSize:24 }}>{getIcon(p.name)}</div>
+                <div style={{ fontWeight:600, fontSize:12, color:'#fff', lineHeight:1.3 }}>{p.name}</div>
                 <div style={{ fontSize:10, color:'var(--text-muted)' }}>{p.category_name}</div>
                 <div style={{ fontWeight:800, fontSize:14, color:'#fff', marginTop:2 }}>{fmt(p.price)}</div>
                 {p.stock<=p.low_stock_threshold&&<span style={{fontSize:9,background:'rgba(239,68,68,.2)',color:'var(--danger)',padding:'2px 5px',borderRadius:4}}>Low ({p.stock})</span>}
@@ -188,6 +243,7 @@ export default function POSPage() {
             <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
               {cart.map(item=>(
                 <div key={item.product_id} style={{ background:'var(--bg)', borderRadius:10, padding:'10px 11px', display:'flex', alignItems:'center', gap:8 }}>
+                  <div style={{ fontSize:20, flexShrink:0 }}>{getIcon(item.product_name)}</div>
                   <div style={{ flex:1, overflow:'hidden' }}>
                     <div style={{ fontWeight:600, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.product_name}</div>
                     <div style={{ fontSize:11, color:'var(--text-muted)' }}>{fmt(item.price)}</div>
@@ -212,12 +268,18 @@ export default function POSPage() {
               <option value="percent">% Off</option>
             </select>
             <input className="input" type="number" placeholder="Discount" value={discount.value} onChange={e=>setDiscount(p=>({...p,value:e.target.value}))} style={{ flex:1, fontSize:12 }} />
+            <select className="input" value={serviceRate} onChange={e=>setServiceRate(parseInt(e.target.value,10))} style={{ width:110, flex:'none', fontSize:12 }}>
+              <option value={0}>No Service</option>
+              <option value={5}>Service 5%</option>
+              <option value={8}>Service 8%</option>
+            </select>
           </div>
-                    <div style={{ display:'flex', gap:7 }}>
+          <div style={{ display:'flex', gap:7 }}>
             <label style={{ fontSize:12, color:'var(--text-muted)', alignSelf:'center', minWidth:58 }}>VAT Tax</label>
             <select className="input" value={vatRate} onChange={e=>setVatRate(e.target.value)} style={{ flex:1, fontSize:12 }}>
               <option value="0">No VAT</option>
               <option value="5">VAT 5%</option>
+              <option value="8">VAT 8%</option>
               <option value="15">VAT 15%</option>
             </select>
           </div>
@@ -225,6 +287,7 @@ export default function POSPage() {
           <div style={{ background:'var(--bg)', borderRadius:10, padding:12 }}>
             <TRow label="Subtotal" value={subtotal} />
             {discountAmount>0 && <TRow label={`Discount${discount.type==='percent'?` (${discount.value}%)`:''}` } value={-discountAmount} color="var(--success)" />}
+            {serviceAmount>0 && <TRow label={`Service Charge (${serviceRate}%)`} value={serviceAmount} color="#fbbf24" />}
             {taxAmount>0 && <TRow label={`VAT (${vatRate}%)`} value={taxAmount} color="#F59E0B" />}
             <div style={{ borderTop:'1px solid var(--border)', paddingTop:7, marginTop:5 }}>
               <TRow label="TOTAL" value={total} bold large />
@@ -249,7 +312,6 @@ export default function POSPage() {
             ))}
           </div>
 
-          {/* Cash */}
           {payMethod==='cash' && (
             <div>
               <div className="form-group" style={{ marginBottom:12 }}>
@@ -309,11 +371,11 @@ export default function POSPage() {
             </div>
           )}
 
-          {/* Summary */}
           <div style={{ background:'var(--bg)', borderRadius:10, padding:12, marginBottom:18 }}>
             <TRow label="Subtotal" value={subtotal} />
             {discountAmount>0 && <TRow label="Discount" value={-discountAmount} color="var(--success)" />}
-           {taxAmount>0 && <TRow label={`VAT (${vatRate}%)`} value={taxAmount} color="#F59E0B" />}
+            {serviceAmount>0 && <TRow label={`Service Charge (${serviceRate}%)`} value={serviceAmount} color="#fbbf24" />}
+            {taxAmount>0 && <TRow label={`VAT (${vatRate}%)`} value={taxAmount} color="#F59E0B" />}
             <div style={{ borderTop:'1px solid var(--border)', paddingTop:7, marginTop:7 }}>
               <TRow label="TOTAL DUE" value={total} bold large />
             </div>

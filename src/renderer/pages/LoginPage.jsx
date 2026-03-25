@@ -55,17 +55,7 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {/* Demo credentials */}
-          <div style={{ marginTop:18, padding:12, background:'var(--bg)', borderRadius:10 }}>
-            <div style={{ fontWeight:700, marginBottom:7, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'.5px', fontSize:9 }}>Demo Credentials</div>
-            {[['Admin',   'admin',   'admin123'],
-              ['Cashier', 'cashier', 'cashier123']].map(([role, u, p]) => (
-              <div key={u} style={{ display:'flex', justifyContent:'space-between', marginBottom:4, fontSize:12 }}>
-                <span style={{ color:'var(--text-muted)' }}>{role}:</span>
-                <span style={{ fontFamily:'monospace', color:'var(--text)' }}>{u} / {p}</span>
-              </div>
-            ))}
-          </div>
+ 
         </div>
       </div>
     </div>

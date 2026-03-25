@@ -21,10 +21,12 @@
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
     "lucide-react": "^0.323.0",
+    "node-thermal-printer": "^4.6.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.0",
     "recharts": "^2.12.0",
+    "usb": "^2.17.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -60,7 +62,9 @@
       {
         "from": "assets/",
         "to": "assets/",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {

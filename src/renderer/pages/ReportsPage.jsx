@@ -29,6 +29,17 @@ export default function ReportsPage() {
     const r = await window.api.getSalesReport({ start_date:range.start, end_date:range.end, payment_method:payFlt||undefined });
     setData(r); setLoading(false);
   }
+    async function handleResetRevenue() {
+    const ok = window.confirm('This will permanently clear all sales/revenue history. Continue?');
+    if (!ok) return;
+    const r = await window.api.resetRevenue();
+    if (r?.success) {
+      showToast('Revenue history reset');
+      load();
+    } else {
+      showToast('Could not reset revenue');
+    }
+  }
 
   const pickPreset = p => { setPreset(p); setRange(p.get()); };
 
@@ -52,6 +63,7 @@ export default function ReportsPage() {
           <p style={{ color:'var(--text-muted)', fontSize:13 }}>{range?.start} → {range?.end}</p>
         </div>
         <div style={{ display:'flex', gap:8 }}>
+        <button className="btn btn-ghost" onClick={handleResetRevenue}>♻️ Reset Revenue</button>
           <button className="btn btn-ghost" onClick={async()=>{ const r=await window.api.exportPDF({start_date:range.start,end_date:range.end}); if(r?.success)showToast('PDF exported!'); }}>📄 PDF</button>
           <button className="btn btn-ghost" onClick={async()=>{ const r=await window.api.exportExcel({start_date:range.start,end_date:range.end}); if(r?.success)showToast('Excel exported!'); }}>📊 Excel</button>
         </div>
@@ -137,20 +149,22 @@ export default function ReportsPage() {
 
           {view==='orders' && (
             <div className="card" style={{ padding:0, overflow:'hidden' }}>
-              <table className="table">
-                <thead><tr><th>Invoice</th><th>Date</th><th>Staff</th><th>Payment</th><th>Total</th></tr></thead>
-                <tbody>
-                  {data.orders.map(o=>(
-                    <tr key={o.id}>
-                      <td style={{ fontFamily:'monospace', fontWeight:700, color:'var(--primary-light)' }}>{o.invoice_number}</td>
-                      <td style={{ color:'var(--text-muted)', fontSize:12 }}>{new Date(o.created_at).toLocaleString('en-PK')}</td>
-                      <td>{o.staff_name}</td>
-                      <td><span style={{ textTransform:'uppercase', fontSize:10, fontWeight:700, color:'var(--text-muted)' }}>{o.payment_method}</span></td>
-                      <td style={{ fontFamily:'monospace', fontWeight:700 }}>{fmt(o.total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+ <div style={{ maxHeight:'60vh', overflow:'auto' }}>
+                <table className="table">
+                  <thead><tr><th>Invoice</th><th>Date</th><th>Staff</th><th>Payment</th><th>Total</th></tr></thead>
+                  <tbody>
+                    {data.orders.map(o=>(
+                      <tr key={o.id}>
+                        <td style={{ fontFamily:'monospace', fontWeight:700, color:'var(--primary-light)' }}>{o.invoice_number}</td>
+                        <td style={{ color:'var(--text-muted)', fontSize:12 }}>{new Date(o.created_at).toLocaleString('en-PK')}</td>
+                        <td>{o.staff_name}</td>
+                        <td><span style={{ textTransform:'uppercase', fontSize:10, fontWeight:700, color:'var(--text-muted)' }}>{o.payment_method}</span></td>
+                        <td style={{ fontFamily:'monospace', fontWeight:700 }}>{fmt(o.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {!data.orders.length && <div style={{ textAlign:'center', padding:40, color:'var(--text-dim)' }}>No orders in selected period</div>}
             </div>
           )}

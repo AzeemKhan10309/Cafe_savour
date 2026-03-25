@@ -118,6 +118,7 @@ function registerIPC() {
 
   // REPORTS
   ipcMain.handle('reports:getSales', (_, filters) => db.getSalesReport(filters));
+  ipcMain.handle('reports:resetRevenue', () => db.resetRevenue());
   ipcMain.handle('reports:exportPDF', async (_, filters) => {
     const result = await dialog.showSaveDialog(mainWindow, {
       defaultPath: 'sales-report.pdf',

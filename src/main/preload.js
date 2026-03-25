@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Reports
   getSalesReport: (filters) => ipcRenderer.invoke('reports:getSales', filters),
+  resetRevenue: () => ipcRenderer.invoke('reports:resetRevenue'),
   exportPDF: (filters) => ipcRenderer.invoke('reports:exportPDF', filters),
   exportExcel: (filters) => ipcRenderer.invoke('reports:exportExcel', filters),
 

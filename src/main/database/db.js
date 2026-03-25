@@ -325,6 +325,14 @@ function getSalesReport(f={}) {
   const cost   = items.reduce((s,i)=>s+i.cost*i.quantity,0);
   return {orders, items, totalRevenue:rev, totalCost:cost, profit:rev-cost};
 }
+function resetRevenue() {
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM order_items').run();
+    db.prepare('DELETE FROM orders').run();
+  });
+  tx();
+  return { success: true };
+}
 
 module.exports = {
   initialize, login,
@@ -333,5 +341,5 @@ module.exports = {
   getAllStaff, createStaff, updateStaff, deleteStaff,
   getNextInvoiceNumber, createOrder, getOrders, getOrderById,
   getDashboardStats, getRevenueChart, getTopProducts,
-  getSalesReport,
+   getSalesReport, resetRevenue,
 };
