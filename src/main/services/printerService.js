@@ -120,6 +120,7 @@ function formatReceipt(data) {
     items,
     discountAmount = 0,
     taxAmount = 0,
+     serviceCharge = 0,
     total,
     paymentMethod,
     date,
@@ -177,14 +178,15 @@ function formatReceipt(data) {
   });
 
   // ─── FOOTER ─────────────────────────────
-  const footer = [
-    dash,
-    discountAmount > 0 ? `Discount : -${money(discountAmount)}` : '',
-    taxAmount > 0      ? `Tax      :  ${money(taxAmount)}`       : '',
-    `Total    : ${money(total)}`,
-    line,
-    thankYou,
-  ].filter(Boolean);
+const footer = [
+  dash,
+  discountAmount > 0 ? `Discount : -${money(discountAmount)}` : '',
+  taxAmount > 0      ? `Tax      :  ${money(taxAmount)}`       : '',
+  serviceCharge > 0  ? `Service  :  ${money(serviceCharge)}`   : '', // ✅ NEW
+  `Total    : ${money(total)}`,
+  line,
+  thankYou,
+].filter(Boolean);
 
   return [...header, ...itemLines, ...footer].join('\n');
 }
