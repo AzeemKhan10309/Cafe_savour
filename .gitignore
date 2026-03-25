@@ -14,3 +14,8 @@ build/
 # IDE
 .vscode/
 .idea/
+node_modules
+dist-electron
+*.exe
+node_modules
+dist
