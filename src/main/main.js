@@ -103,6 +103,7 @@ function registerIPC() {
   ipcMain.handle('orders:create', (_, data) => db.createOrder(data));
   ipcMain.handle('orders:getAll', (_, filters) => db.getOrders(filters));
   ipcMain.handle('orders:getById', (_, id) => db.getOrderById(id));
+  ipcMain.handle('orders:delete', (_, id) => db.deleteOrder(id));
   ipcMain.handle('orders:getNextInvoiceNumber', () => db.getNextInvoiceNumber());
 
   // STAFF

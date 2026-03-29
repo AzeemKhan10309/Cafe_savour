@@ -118,9 +118,15 @@ function formatReceipt(data) {
     cafe,
     invoice,
     items,
+    tableName = '',
+    subtotal = 0,
     discountAmount = 0,
+    discountType = 'flat',
+    discount = 0,
+    taxRate = 0,
     taxAmount = 0,
-     serviceCharge = 0,
+    serviceRate = 0,
+    serviceAmount = 0,
     total,
     paymentMethod,
     date,
@@ -160,6 +166,7 @@ function formatReceipt(data) {
     'Ph:03466262146',
     line,
     `Invoice : ${invoice}`,
+    tableName ? `Table   : ${tableName}` : '',
     `Date    : ${date}`,
     `Payment : ${paymentMethod?.toUpperCase()}`,
     line,
@@ -178,15 +185,19 @@ function formatReceipt(data) {
   });
 
   // ─── FOOTER ─────────────────────────────
+    const discountLabel = discountType === 'percent'
+    ? `Discount (${parseFloat(discount || 0).toFixed(0)}%)`
+    : 'Discount';
 const footer = [
   dash,
-  discountAmount > 0 ? `Discount : -${money(discountAmount)}` : '',
-  taxAmount > 0      ? `Tax      :  ${money(taxAmount)}`       : '',
-  serviceCharge > 0  ? `Service  :  ${money(serviceCharge)}`   : '', // ✅ NEW
-  `Total    : ${money(total)}`,
-  line,
-  thankYou,
-].filter(Boolean);
+`Subtotal : ${money(subtotal)}`,
+    discountAmount > 0 ? `${discountLabel} : -${money(discountAmount)}` : '',
+    serviceAmount > 0  ? `Service Tax (${parseFloat(serviceRate || 0).toFixed(0)}%) : ${money(serviceAmount)}` : '',
+    taxAmount > 0      ? `VAT Tax (${parseFloat(taxRate || 0).toFixed(0)}%) : ${money(taxAmount)}` : '',
+    `Total    : ${money(total)}`,
+    line,
+    thankYou,
+  ].filter(Boolean);
 
   return [...header, ...itemLines, ...footer].join('\n');
 }

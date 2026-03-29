@@ -14,6 +14,7 @@ function initialize() {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   createTables();
+    migrateSchema();
   seedIfEmpty();
 }
 
@@ -51,6 +52,7 @@ function createTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       invoice_number TEXT NOT NULL UNIQUE,
       staff_id INTEGER REFERENCES staff(id),
+      table_name TEXT DEFAULT '',
       subtotal REAL NOT NULL,
       discount REAL DEFAULT 0,
       discount_type TEXT DEFAULT 'flat',
@@ -78,6 +80,17 @@ function createTables() {
       value TEXT
     );
   `);
+}
+function migrateSchema() {
+  addColumnIfMissing('orders', 'table_name', "TEXT DEFAULT ''");
+}
+
+function addColumnIfMissing(table, column, definition) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  const hasCol = cols.some((c) => c.name === column);
+  if (!hasCol) {
+    db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+  }
 }
 
 function seedIfEmpty() {
@@ -219,11 +232,12 @@ function createOrder(data) {
   const tx = db.transaction(d => {
     const r = db.prepare(`
       INSERT INTO orders 
-      (invoice_number,staff_id,subtotal,discount,discount_type,tax_rate,tax_amount,total,payment_method,payment_details,notes) 
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)
+     (invoice_number,staff_id,table_name,subtotal,discount,discount_type,tax_rate,tax_amount,total,payment_method,payment_details,notes) 
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
       d.invoice_number,
       d.staff_id,
+      d.table_name || '',
       d.subtotal,
       d.discount||0,
       d.discount_type||'flat',
@@ -273,7 +287,25 @@ function getOrderById(id) {
   o.items = db.prepare('SELECT * FROM order_items WHERE order_id=?').all(id) || [];
   return o;
 }
+function deleteOrder(id) {
+  const tx = db.transaction((orderId) => {
+    const order = db.prepare('SELECT id FROM orders WHERE id=?').get(orderId);
+    if (!order) return { success: false, message: 'Order not found' };
 
+    const items = db.prepare('SELECT product_id, quantity FROM order_items WHERE order_id=?').all(orderId) || [];
+    const restockStmt = db.prepare('UPDATE products SET stock = stock + ? WHERE id=?');
+    items.forEach((item) => {
+      restockStmt.run(item.quantity, item.product_id);
+    });
+
+    db.prepare('DELETE FROM order_items WHERE order_id=?').run(orderId);
+    db.prepare('DELETE FROM orders WHERE id=?').run(orderId);
+
+    return { success: true };
+  });
+
+  return tx(id);
+}
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function getDashboardStats() {
   const today = new Date().toISOString().split('T')[0];
@@ -340,6 +372,7 @@ module.exports = {
   getAllCategories, createCategory, deleteCategory,
   getAllStaff, createStaff, updateStaff, deleteStaff,
   getNextInvoiceNumber, createOrder, getOrders, getOrderById,
+  deleteOrder,
   getDashboardStats, getRevenueChart, getTopProducts,
    getSalesReport, resetRevenue,
 };

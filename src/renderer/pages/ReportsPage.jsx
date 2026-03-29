@@ -29,8 +29,8 @@ export default function ReportsPage() {
     const r = await window.api.getSalesReport({ start_date:range.start, end_date:range.end, payment_method:payFlt||undefined });
     setData(r); setLoading(false);
   }
-    async function handleResetRevenue() {
-    const ok = window.confirm('This will permanently clear all sales/revenue history. Continue?');
+  async function handleResetRevenue() {
+   const ok = window.confirm('This will permanently clear all sales/revenue history. Continue?');
     if (!ok) return;
     const r = await window.api.resetRevenue();
     if (r?.success) {
@@ -40,6 +40,18 @@ export default function ReportsPage() {
       showToast('Could not reset revenue');
     }
   }
+    async function handleDeleteOrder(order) {
+    const ok = window.confirm(`Delete order ${order.invoice_number}? Stock will be restored.`);
+    if (!ok) return;
+    const res = await window.api.deleteOrder(order.id);
+    if (res?.success) {
+      showToast(`Order ${order.invoice_number} deleted`);
+      load();
+    } else {
+      showToast(res?.message || 'Could not delete order', 'error');
+    }
+  }
+
 
   const pickPreset = p => { setPreset(p); setRange(p.get()); };
 
@@ -151,7 +163,7 @@ export default function ReportsPage() {
             <div className="card" style={{ padding:0, overflow:'hidden' }}>
  <div style={{ maxHeight:'60vh', overflow:'auto' }}>
                 <table className="table">
-                  <thead><tr><th>Invoice</th><th>Date</th><th>Staff</th><th>Payment</th><th>Total</th></tr></thead>
+               <thead><tr><th>Invoice</th><th>Date</th><th>Staff</th><th>Payment</th><th>Total</th><th>Action</th></tr></thead>
                   <tbody>
                     {data.orders.map(o=>(
                       <tr key={o.id}>
@@ -160,6 +172,16 @@ export default function ReportsPage() {
                         <td>{o.staff_name}</td>
                         <td><span style={{ textTransform:'uppercase', fontSize:10, fontWeight:700, color:'var(--text-muted)' }}>{o.payment_method}</span></td>
                         <td style={{ fontFamily:'monospace', fontWeight:700 }}>{fmt(o.total)}</td>
+                           <td>
+                          <button
+                            className="btn btn-sm"
+                            style={{ background:'rgba(239,68,68,.15)', color:'var(--danger)', border:'none' }}
+                            onClick={() => handleDeleteOrder(o)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+
                       </tr>
                     ))}
                   </tbody>
