@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('api', {
   createOrder: (data) => ipcRenderer.invoke('orders:create', data),
   getOrders: (filters) => ipcRenderer.invoke('orders:getAll', filters),
   getOrderById: (id) => ipcRenderer.invoke('orders:getById', id),
+    deleteOrder: (id) => ipcRenderer.invoke('orders:delete', id),
   getNextInvoiceNumber: () => ipcRenderer.invoke('orders:getNextInvoiceNumber'),
 
   // Staff

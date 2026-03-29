@@ -1,42 +1,53 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../App';
 
-const CAFE = { name:'Saudi Saver House', address:'Main Boulevard, Lahore, Pakistan', phone:'+92 346 6262146', footer:'Thank you for visiting Saudi Saver House!' };
+const CAFE = { name:'Saudi Savour House', address:'Main Boulevard, Lahore, Pakistan', phone:'+92 346 6262146', footer:'Thank you for visiting Saudi Saver House!' };
 const fmt  = v => `Rs. ${Number(v||0).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
 
 // ── Smart Icon Function (Offline, Instant) ──
 function getIcon(name = '') {
   const n = name.toLowerCase();
 
-  // ── Main Items ──
-  if (/karahi/.test(n) && /white/.test(n))         return '🍛'; // White Karahi
-  if (/karahi/.test(n))                             return '🍗'; // Chicken Karahi
-  if (/biryani/.test(n))                            return '🍚'; // Chicken Biryani
-  if (/seekh|kabab|kebab/.test(n))                  return '🍢'; // Seekh Kabab
-  if (/daal|dal/.test(n))                           return '🫕'; // Daal Mash
+  // ── BBQ Items ──
+  if (/beef kabab/.test(n))        return '🥩';
+  if (/chicken kabab/.test(n))     return '🍗';
+  if (/gola kabab/.test(n))        return '🍢';
+  if (/rashmi kabab/.test(n))      return '🍢';
+  if (/tikka boti/.test(n))        return '🍢';
+  if (/malai boti/.test(n))        return '🍢';
+  if (/leg piece/.test(n))         return '🍗';
+  if (/chest piece/.test(n))       return '🍗';
 
-  // ── Qeema Items ──
-  if (/qeema|kema/.test(n))                         return '🥩'; // Chicken Qeema
+  // ── Karahi / Main ──
+  if (/mutton karahi/.test(n))     return '🍖';
+  if (/beef karahi/.test(n))       return '🥩';
+  if (/karahi/.test(n))            return '🍲';
 
-  // ── Handi Items ──
-  if (/handi/.test(n) && /mutton/.test(n))          return '🍖'; // Mutton Handi
-  if (/handi/.test(n))                              return '🫕'; // Chicken Handi / Extra Handi
+  // ── Mandi / Faham ──
+  if (/mandi/.test(n))             return '🍛';
+  if (/faham/.test(n))             return '🍗';
 
-  // ── Side Items ──
-  if (/raita/.test(n))                              return '🥛'; // Raita
-  if (/salad/.test(n))                              return '🥗'; // Green Salad
-  if (/soft drink|soda|cola|pepsi|coke|sprite|7up|fanta|dew|sting/.test(n)) return '🥤'; // Soft Drink
-  if (/kheera|cucumber/.test(n))                    return '🥒'; // Kheera
+  // ── Rice ──
+  if (/rice/.test(n))              return '🍚';
 
-  // ── Drinks (extra) ──
-  if (/chai|tea|kahwa/.test(n))                     return '🍵';
-  if (/lassi/.test(n))                              return '🥛';
-  if (/juice/.test(n))                              return '🧃';
-  if (/water|pani/.test(n))                         return '💧';
-  if (/shake|smoothie/.test(n))                     return '🥤';
+  // ── Drinks ──
+  if (/water|mineral/.test(n))     return '💧';
+  if (/1 liter|1.5 liter|can|drink/.test(n)) return '🥤';
 
-  // ── Bread ──
-  if (/naan|roti|paratha/.test(n))                  return '🫓';
+  // ── Deals ──
+  if (/deal/.test(n))              return '🍽️';
+
+  // ── Extras ──
+  if (/daal|dal mash/.test(n))     return '🫕';
+  if (/sufra/.test(n))             return '🧻';
+  if (/disposable/.test(n))        return '🥡';
+
+  // ── Karahi BBQ Mix ──
+  if (/kabab.*karahi/.test(n))     return '🍢';
+  if (/boti.*karahi/.test(n))      return '🍢';
+
+  // ── Fallback for any kabab ──
+  if (/kabab|kebab/.test(n))       return '🍢';
 
   // ── Default ──
   return '🍽️';
@@ -82,6 +93,7 @@ export default function POSPage() {
   const [payMethod,     setPayMethod]    = useState('cash');
   const [splitAmt,      setSplitAmt]     = useState({ cash:'', card:'', qr:'' });
   const [cashGiven,     setCashGiven]    = useState('');
+  const [tableName,     setTableName]    = useState('');
   const [notes,         setNotes]        = useState('');
   const [showCheckout,  setShowCheckout] = useState(false);
   const [processing,    setProcessing]   = useState(false);
@@ -115,8 +127,7 @@ export default function POSPage() {
 
   const clearCart = () => {
     setCart([]); setDiscount({value:'',type:'flat'}); setServiceRate(0);
-    setVatRate('0'); setCashGiven(''); setNotes(''); setSplitAmt({cash:'',card:'',qr:''});
-  };
+    setVatRate('0'); setCashGiven(''); setTableName(''); setNotes(''); setSplitAmt({cash:'',card:'',qr:''});  };
 
   // Calculations
   const subtotal       = cart.reduce((s,i)=>s+i.subtotal,0);
@@ -143,6 +154,7 @@ export default function POSPage() {
     try {
       const r = await window.api.createOrder({
         invoice_number:invoiceNo, staff_id:user.id,
+        table_name: tableName.trim(),
         subtotal, discount:parseFloat(discount.value)||0, discount_type:discount.type,
         tax_rate:parseFloat(vatRate)||0, tax_amount:taxAmount,
         service_rate:serviceRate, service_amount:serviceAmount,
@@ -155,6 +167,7 @@ export default function POSPage() {
 
       const printResult = await window.api.printReceipt({
         cafe:CAFE, invoice:invoiceNo, items:cart,
+        tableName: tableName.trim(),
         subtotal, discount:parseFloat(discount.value)||0, discountAmount, discountType:discount.type,
         taxRate:parseFloat(vatRate)||0, taxAmount,
         serviceRate, serviceAmount,
@@ -283,7 +296,25 @@ export default function POSPage() {
               <option value="15">VAT 15%</option>
             </select>
           </div>
-          <input className="input" placeholder="Order notes…" value={notes} onChange={e=>setNotes(e.target.value)} style={{ fontSize:12 }} />
+<select
+  className="input"
+  value={tableName}
+  onChange={(e) => setTableName(e.target.value)}
+  style={{ fontSize:12 }}
+>
+  <option value="">Select Table</option>
+
+  {/* Tables 1–10 */}
+  {Array.from({ length: 10 }, (_, i) => (
+    <option key={i + 1} value={`Table ${i + 1}`}>
+      Table {i + 1}
+    </option>
+  ))}
+
+  {/* Halls */}
+  <option value="Saudi Hall">Saudi Hall</option>
+  <option value="Sitting Hall">Sitting Hall</option>
+</select>          <input className="input" placeholder="Order notes…" value={notes} onChange={e=>setNotes(e.target.value)} style={{ fontSize:12 }} />
           <div style={{ background:'var(--bg)', borderRadius:10, padding:12 }}>
             <TRow label="Subtotal" value={subtotal} />
             {discountAmount>0 && <TRow label={`Discount${discount.type==='percent'?` (${discount.value}%)`:''}` } value={-discountAmount} color="var(--success)" />}
@@ -372,6 +403,12 @@ export default function POSPage() {
           )}
 
           <div style={{ background:'var(--bg)', borderRadius:10, padding:12, marginBottom:18 }}>
+           {!!tableName.trim() && (
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                <span style={{ fontSize:13, color:'var(--text-muted)' }}>Table</span>
+                <span style={{ fontSize:14, fontWeight:700, color:'#fff' }}>{tableName.trim()}</span>
+              </div>
+            )}
             <TRow label="Subtotal" value={subtotal} />
             {discountAmount>0 && <TRow label="Discount" value={-discountAmount} color="var(--success)" />}
             {serviceAmount>0 && <TRow label={`Service Charge (${serviceRate}%)`} value={serviceAmount} color="#fbbf24" />}
