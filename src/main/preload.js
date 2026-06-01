@@ -31,6 +31,22 @@ contextBridge.exposeInMainWorld('api', {
   createStaff: (data) => ipcRenderer.invoke('staff:create', data),
   updateStaff: (data) => ipcRenderer.invoke('staff:update', data),
   deleteStaff: (id) => ipcRenderer.invoke('staff:delete', id),
+  // Expenses
+  getExpenseCategories: () => ipcRenderer.invoke('expenseCategories:getAll'),
+  createExpenseCategory: (data) => ipcRenderer.invoke('expenseCategories:create', data),
+  getExpenses: (filters) => ipcRenderer.invoke('expenses:getAll', filters),
+  createExpense: (data) => ipcRenderer.invoke('expenses:create', data),
+  updateExpense: (data) => ipcRenderer.invoke('expenses:update', data),
+  deleteExpense: (id) => ipcRenderer.invoke('expenses:delete', id),
+  getExpenseSummary: (filters) => ipcRenderer.invoke('expenses:getSummary', filters),
+
+  // Investments
+  getInvestments: (filters) => ipcRenderer.invoke('investments:getAll', filters),
+  createInvestment: (data) => ipcRenderer.invoke('investments:create', data),
+  updateInvestment: (data) => ipcRenderer.invoke('investments:update', data),
+  deleteInvestment: (id) => ipcRenderer.invoke('investments:delete', id),
+  getInvestmentSummary: (filters) => ipcRenderer.invoke('investments:getSummary', filters),
+  getFinanceOverview: () => ipcRenderer.invoke('finance:getOverview'),
 
   // Dashboard
   getDashboardStats: () => ipcRenderer.invoke('dashboard:getStats'),

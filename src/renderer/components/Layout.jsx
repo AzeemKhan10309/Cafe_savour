@@ -18,6 +18,7 @@ export default function Layout() {
     ...(isAdmin ? [
       { to: '/inventory', label: 'Inventory', icon: '📦' },
       { to: '/reports',   label: 'Reports',   icon: '📈' },
+      { to: '/finance',   label: 'Finance',   icon: '💰' },
       { to: '/staff',     label: 'Staff',     icon: '👥' },
     ] : []),
   ];

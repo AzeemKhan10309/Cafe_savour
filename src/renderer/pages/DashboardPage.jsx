@@ -48,11 +48,13 @@ export default function DashboardPage() {
       </div>
 
       {/* KPIs */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:14 }}>
         <KPI icon="💰" label="Today's Revenue"  value={fmt(stats?.todayStats?.revenue)}   sub={`vs ${fmt(stats?.ystStats?.revenue)} yesterday`} color="#4F46E5" />
         <KPI icon="🛒" label="Today's Orders"   value={stats?.todayStats?.orders||0}       sub="Transactions today"                              color="#10B981" />
         <KPI icon="📅" label="Month Revenue"    value={fmt(stats?.monthStats?.revenue)}    sub={`${stats?.monthStats?.orders||0} orders`}         color="#F59E0B" />
         <KPI icon="⚠️" label="Low Stock Alerts" value={stats?.lowStock||0}                  sub="Need restocking"                                 color={stats?.lowStock>0?'#EF4444':'#10B981'} />
+        <KPI icon="💸" label="Month Expenses" value={fmt(stats?.monthExpenses)} sub="Operating costs this month" color="#EF4444" />
+        <KPI icon="🏦" label="Total Invested" value={fmt(stats?.totalInvested)} sub="Capital and funding tracked" color="#06B6D4" />
       </div>
 
       {/* Charts */}

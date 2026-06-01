@@ -14,7 +14,8 @@ function initialize() {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   createTables();
-    migrateSchema();
+  migrateSchema();
+    seedExpenseCategories();
   seedIfEmpty();
 }
 
@@ -75,6 +76,37 @@ function createTables() {
       quantity INTEGER NOT NULL,
       subtotal REAL NOT NULL
     );
+        CREATE TABLE IF NOT EXISTS expense_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT DEFAULT '#4F46E5',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_name TEXT NOT NULL,
+      amount REAL NOT NULL CHECK(amount >= 0),
+      category_id INTEGER NOT NULL REFERENCES expense_categories(id),
+      expense_date TEXT NOT NULL,
+      notes TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);
+    CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id);
+    CREATE TABLE IF NOT EXISTS investments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      investor_name TEXT DEFAULT '',
+      amount REAL NOT NULL CHECK(amount >= 0),
+      investment_date TEXT NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('owner','external','loan')),
+      notes TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_investments_date ON investments(investment_date);
+    CREATE INDEX IF NOT EXISTS idx_investments_type ON investments(type);
+
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
@@ -108,6 +140,230 @@ function seedIfEmpty() {
   setSetting.run('tax_rate',       '0');
   setSetting.run('receipt_footer', 'Thank you for visiting Saudi Saver House!');
   setSetting.run('currency',       'Rs.');
+}
+
+function seedExpenseCategories() {
+  const categories = [
+    ['Inventory', '#10B981'],
+    ['Utilities', '#3B82F6'],
+    ['Rent', '#F59E0B'],
+    ['Staff', '#EC4899'],
+    ['Maintenance', '#8B5CF6'],
+    ['Marketing', '#06B6D4'],
+    ['Other', '#6B7280'],
+  ];
+  const stmt = db.prepare('INSERT OR IGNORE INTO expense_categories (name,color) VALUES (?,?)');
+  categories.forEach(([name, color]) => stmt.run(name, color));
+}
+
+
+function toISODate(value, fieldName) {
+  if (!value) throw new Error(`${fieldName} is required.`);
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) throw new Error(`${fieldName} must be a valid date.`);
+  return d.toISOString().split('T')[0];
+}
+
+function positiveAmount(value, fieldName = 'Amount') {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) throw new Error(`${fieldName} must be greater than zero.`);
+  return Math.round(n * 100) / 100;
+}
+
+function ensureText(value, fieldName, max = 120) {
+  const text = String(value || '').trim();
+  if (!text) throw new Error(`${fieldName} is required.`);
+  if (text.length > max) throw new Error(`${fieldName} cannot exceed ${max} characters.`);
+  return text;
+}
+
+function normalizeExpense(d) {
+  const categoryId = Number.parseInt(d.category_id, 10);
+  if (!Number.isInteger(categoryId)) throw new Error('Expense category is required.');
+  const cat = db.prepare('SELECT id FROM expense_categories WHERE id=?').get(categoryId);
+  if (!cat) throw new Error('Expense category does not exist.');
+  return {
+    id: d.id ? Number.parseInt(d.id, 10) : undefined,
+    item_name: ensureText(d.item_name, 'Item name'),
+    amount: positiveAmount(d.amount, 'Cost amount'),
+    category_id: categoryId,
+    expense_date: toISODate(d.expense_date, 'Expense date'),
+    notes: String(d.notes || '').trim(),
+  };
+}
+
+function normalizeInvestment(d) {
+  const allowed = new Set(['owner', 'external', 'loan']);
+  const type = String(d.type || '').trim();
+  if (!allowed.has(type)) throw new Error('Investment type must be owner, external, or loan.');
+  return {
+    id: d.id ? Number.parseInt(d.id, 10) : undefined,
+    investor_name: String(d.investor_name || '').trim(),
+    amount: positiveAmount(d.amount, 'Investment amount'),
+    investment_date: toISODate(d.investment_date, 'Investment date'),
+    type,
+    notes: String(d.notes || '').trim(),
+  };
+}
+
+function buildDateFilter(alias, dateColumn, f = {}) {
+  const parts = [];
+  const params = [];
+  const prefix = alias ? `${alias}.` : '';
+  if (f.start_date) { parts.push(`DATE(${prefix}${dateColumn}) >= ?`); params.push(toISODate(f.start_date, 'Start date')); }
+  if (f.end_date) { parts.push(`DATE(${prefix}${dateColumn}) <= ?`); params.push(toISODate(f.end_date, 'End date')); }
+  return { where: parts.length ? ` AND ${parts.join(' AND ')}` : '', params };
+}
+
+// ─── EXPENSES ────────────────────────────────────────────────────────────────
+function getExpenseCategories() {
+  return db.prepare('SELECT * FROM expense_categories ORDER BY name').all() || [];
+}
+
+function createExpenseCategory(d) {
+  const name = ensureText(d.name, 'Category name', 80);
+  const color = String(d.color || '#4F46E5').trim();
+  const r = db.prepare('INSERT INTO expense_categories (name,color) VALUES (?,?)').run(name, color);
+  return { id: r.lastInsertRowid, name, color };
+}
+
+function getExpenses(f = {}) {
+  let q = `
+    SELECT e.*, c.name as category_name, c.color as category_color
+    FROM expenses e
+    JOIN expense_categories c ON e.category_id = c.id
+    WHERE 1=1
+  `;
+  const p = [];
+  const date = buildDateFilter('e', 'expense_date', f);
+  q += date.where; p.push(...date.params);
+  if (f.category_id) { q += ' AND e.category_id=?'; p.push(Number.parseInt(f.category_id, 10)); }
+  q += ' ORDER BY e.expense_date DESC, e.id DESC';
+  if (f.limit) { q += ' LIMIT ?'; p.push(Number.parseInt(f.limit, 10)); }
+  return db.prepare(q).all(...p) || [];
+}
+
+function createExpense(data) {
+  const d = normalizeExpense(data);
+  const r = db.prepare(`
+    INSERT INTO expenses (item_name, amount, category_id, expense_date, notes)
+    VALUES (?,?,?,?,?)
+  `).run(d.item_name, d.amount, d.category_id, d.expense_date, d.notes);
+  return { success: true, id: r.lastInsertRowid };
+}
+
+function updateExpense(data) {
+  const d = normalizeExpense(data);
+  if (!d.id) throw new Error('Expense id is required.');
+  const r = db.prepare(`
+    UPDATE expenses
+    SET item_name=?, amount=?, category_id=?, expense_date=?, notes=?, updated_at=CURRENT_TIMESTAMP
+    WHERE id=?
+  `).run(d.item_name, d.amount, d.category_id, d.expense_date, d.notes, d.id);
+  if (!r.changes) throw new Error('Expense not found.');
+  return { success: true };
+}
+
+function deleteExpense(id) {
+  const r = db.prepare('DELETE FROM expenses WHERE id=?').run(id);
+  return { success: r.changes > 0, message: r.changes ? undefined : 'Expense not found' };
+}
+
+function getExpenseSummary(f = {}) {
+  const date = buildDateFilter('e', 'expense_date', f);
+  const scoped = `FROM expenses e WHERE 1=1${date.where}`;
+  const params = date.params;
+  const total = db.prepare(`SELECT COALESCE(SUM(amount),0) as total FROM expenses e WHERE 1=1${date.where}`).get(...params).total || 0;
+  const daily = db.prepare(`SELECT expense_date as period, COALESCE(SUM(amount),0) as total ${scoped} GROUP BY expense_date ORDER BY expense_date DESC LIMIT 31`).all(...params) || [];
+  const monthly = db.prepare(`SELECT strftime('%Y-%m', expense_date) as period, COALESCE(SUM(amount),0) as total ${scoped} GROUP BY period ORDER BY period DESC LIMIT 24`).all(...params) || [];
+  const yearly = db.prepare(`SELECT strftime('%Y', expense_date) as period, COALESCE(SUM(amount),0) as total ${scoped} GROUP BY period ORDER BY period DESC LIMIT 10`).all(...params) || [];
+  const categories = db.prepare(`
+    SELECT c.name, c.color, COALESCE(SUM(e.amount),0) as total, COUNT(e.id) as count
+    FROM expense_categories c
+    LEFT JOIN expenses e ON e.category_id = c.id${date.where}
+    GROUP BY c.id
+    HAVING total > 0
+    ORDER BY total DESC
+  `).all(...params) || [];
+  return { total, daily, monthly, yearly, categories };
+}
+
+// ─── INVESTMENTS ─────────────────────────────────────────────────────────────
+function getInvestments(f = {}) {
+  let q = 'SELECT * FROM investments WHERE 1=1';
+  const p = [];
+  const date = buildDateFilter('', 'investment_date', f);
+  q += date.where; p.push(...date.params);
+  if (f.type) { q += ' AND type=?'; p.push(f.type); }
+  q += ' ORDER BY investment_date DESC, id DESC';
+  if (f.limit) { q += ' LIMIT ?'; p.push(Number.parseInt(f.limit, 10)); }
+  return db.prepare(q).all(...p) || [];
+}
+
+function createInvestment(data) {
+  const d = normalizeInvestment(data);
+  const r = db.prepare(`
+    INSERT INTO investments (investor_name, amount, investment_date, type, notes)
+    VALUES (?,?,?,?,?)
+  `).run(d.investor_name, d.amount, d.investment_date, d.type, d.notes);
+  return { success: true, id: r.lastInsertRowid };
+}
+
+function updateInvestment(data) {
+  const d = normalizeInvestment(data);
+  if (!d.id) throw new Error('Investment id is required.');
+  const r = db.prepare(`
+    UPDATE investments
+    SET investor_name=?, amount=?, investment_date=?, type=?, notes=?, updated_at=CURRENT_TIMESTAMP
+    WHERE id=?
+  `).run(d.investor_name, d.amount, d.investment_date, d.type, d.notes, d.id);
+  if (!r.changes) throw new Error('Investment not found.');
+  return { success: true };
+}
+
+function deleteInvestment(id) {
+  const r = db.prepare('DELETE FROM investments WHERE id=?').run(id);
+  return { success: r.changes > 0, message: r.changes ? undefined : 'Investment not found' };
+}
+
+function getInvestmentSummary(f = {}) {
+  const date = buildDateFilter('', 'investment_date', f);
+  const total = db.prepare(`SELECT COALESCE(SUM(amount),0) as total FROM investments WHERE 1=1${date.where}`).get(...date.params).total || 0;
+  const byType = db.prepare(`
+    SELECT type, COALESCE(SUM(amount),0) as total, COUNT(*) as count
+    FROM investments
+    WHERE 1=1${date.where}
+    GROUP BY type
+    ORDER BY total DESC
+  `).all(...date.params) || [];
+  const monthly = db.prepare(`
+    SELECT strftime('%Y-%m', investment_date) as period, COALESCE(SUM(amount),0) as total
+    FROM investments
+    WHERE 1=1${date.where}
+    GROUP BY period
+    ORDER BY period DESC
+    LIMIT 24
+  `).all(...date.params) || [];
+  return { total, byType, monthly };
+}
+
+function getFinanceOverview() {
+  const sales = getSalesReport({});
+  const totalExpenses = db.prepare('SELECT COALESCE(SUM(amount),0) as total FROM expenses').get().total || 0;
+  const totalInvested = db.prepare('SELECT COALESCE(SUM(amount),0) as total FROM investments').get().total || 0;
+  const monthExpenses = db.prepare("SELECT COALESCE(SUM(amount),0) as total FROM expenses WHERE strftime('%Y-%m',expense_date)=strftime('%Y-%m','now')").get().total || 0;
+  const monthInvestments = db.prepare("SELECT COALESCE(SUM(amount),0) as total FROM investments WHERE strftime('%Y-%m',investment_date)=strftime('%Y-%m','now')").get().total || 0;
+  return {
+    totalRevenue: sales.totalRevenue,
+    grossProfit: sales.profit,
+    totalExpenses,
+    totalInvested,
+    netProfitLoss: sales.profit - totalExpenses,
+    monthExpenses,
+    monthInvestments,
+    recentExpenses: getExpenses({ limit: 5 }),
+    recentInvestments: getInvestments({ limit: 5 }),
+  };
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
@@ -315,6 +571,8 @@ function getDashboardStats() {
     ystStats:   db.prepare('SELECT SUM(total) as revenue FROM orders WHERE DATE(created_at)=?').get(yday.toISOString().split('T')[0]) || {revenue:0},
     monthStats: db.prepare("SELECT SUM(total) as revenue, COUNT(*) as orders FROM orders WHERE strftime('%Y-%m',created_at)=strftime('%Y-%m','now')").get() || {orders:0,revenue:0},
     lowStock:   db.prepare('SELECT COUNT(*) as c FROM products WHERE stock<=low_stock_threshold AND active=1').get().c || 0,
+     monthExpenses: db.prepare("SELECT COALESCE(SUM(amount),0) as total FROM expenses WHERE strftime('%Y-%m',expense_date)=strftime('%Y-%m','now')").get().total || 0,
+    totalInvested: db.prepare('SELECT COALESCE(SUM(amount),0) as total FROM investments').get().total || 0,
   };
 }
 
@@ -373,6 +631,8 @@ module.exports = {
   getAllStaff, createStaff, updateStaff, deleteStaff,
   getNextInvoiceNumber, createOrder, getOrders, getOrderById,
   deleteOrder,
+  getExpenseCategories, createExpenseCategory, getExpenses, createExpense, updateExpense, deleteExpense, getExpenseSummary,
+  getInvestments, createInvestment, updateInvestment, deleteInvestment, getInvestmentSummary, getFinanceOverview,
   getDashboardStats, getRevenueChart, getTopProducts,
-   getSalesReport, resetRevenue,
+  getSalesReport, resetRevenue,
 };

@@ -111,7 +111,21 @@ function registerIPC() {
   ipcMain.handle('staff:create', (_, data) => db.createStaff(data));
   ipcMain.handle('staff:update', (_, data) => db.updateStaff(data));
   ipcMain.handle('staff:delete', (_, id) => db.deleteStaff(id));
+ ipcMain.handle('expenseCategories:getAll', () => db.getExpenseCategories());
+  ipcMain.handle('expenseCategories:create', (_, data) => db.createExpenseCategory(data));
+  ipcMain.handle('expenses:getAll', (_, filters) => db.getExpenses(filters));
+  ipcMain.handle('expenses:create', (_, data) => db.createExpense(data));
+  ipcMain.handle('expenses:update', (_, data) => db.updateExpense(data));
+  ipcMain.handle('expenses:delete', (_, id) => db.deleteExpense(id));
+  ipcMain.handle('expenses:getSummary', (_, filters) => db.getExpenseSummary(filters));
 
+  // INVESTMENTS
+  ipcMain.handle('investments:getAll', (_, filters) => db.getInvestments(filters));
+  ipcMain.handle('investments:create', (_, data) => db.createInvestment(data));
+  ipcMain.handle('investments:update', (_, data) => db.updateInvestment(data));
+  ipcMain.handle('investments:delete', (_, id) => db.deleteInvestment(id));
+  ipcMain.handle('investments:getSummary', (_, filters) => db.getInvestmentSummary(filters));
+  ipcMain.handle('finance:getOverview', () => db.getFinanceOverview());
   // DASHBOARD
   ipcMain.handle('dashboard:getStats', () => db.getDashboardStats());
   ipcMain.handle('dashboard:getRevenueChart', (_, days) => db.getRevenueChart(days));
