@@ -94,18 +94,27 @@ function createTables() {
     );
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);
     CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id);
+        CREATE TABLE IF NOT EXISTS investors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      notes TEXT DEFAULT '',
+      expected_monthly_amount REAL DEFAULT 0 CHECK(expected_monthly_amount >= 0),
+      active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_investors_name ON investors(name);
     CREATE TABLE IF NOT EXISTS investments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      investor_name TEXT DEFAULT '',
+      investor_id INTEGER REFERENCES investors(id) ON DELETE SET NULL,
       amount REAL NOT NULL CHECK(amount >= 0),
       investment_date TEXT NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('owner','external','loan')),
+      investor_id INTEGER REFERENCES investors(id) ON DELETE SET NULL,
       notes TEXT DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_investments_date ON investments(investment_date);
-    CREATE INDEX IF NOT EXISTS idx_investments_type ON investments(type);
 
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
@@ -115,6 +124,12 @@ function createTables() {
 }
 function migrateSchema() {
   addColumnIfMissing('orders', 'table_name', "TEXT DEFAULT ''");
+    addColumnIfMissing('investors', 'expected_monthly_amount', 'REAL DEFAULT 0');
+  addColumnIfMissing('investors', 'active', 'INTEGER DEFAULT 1');
+  addColumnIfMissing('investments', 'investor_id', 'INTEGER REFERENCES investors(id) ON DELETE SET NULL');
+  addColumnIfMissing('investments', 'payment_method', "TEXT DEFAULT 'cash'");
+  backfillInvestorsFromLegacyInvestments();
+  createInvestmentIndexes();
 }
 
 function addColumnIfMissing(table, column, definition) {
@@ -123,6 +138,34 @@ function addColumnIfMissing(table, column, definition) {
   if (!hasCol) {
     db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
   }
+}
+function tableHasColumn(table, column) {
+  return db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+}
+
+function backfillInvestorsFromLegacyInvestments() {
+  if (!tableHasColumn('investments', 'investor_name')) return;
+
+  const legacyRows = db.prepare(`
+    SELECT DISTINCT TRIM(investor_name) as name
+    FROM investments
+    WHERE investor_id IS NULL AND TRIM(COALESCE(investor_name,'')) <> ''
+  `).all();
+  const insertInvestor = db.prepare('INSERT OR IGNORE INTO investors (name, notes) VALUES (?, ?)');
+  legacyRows.forEach((row) => insertInvestor.run(row.name, 'Imported from legacy investment records.'));
+
+  db.prepare(`
+    UPDATE investments
+    SET investor_id = (SELECT id FROM investors WHERE investors.name = TRIM(investments.investor_name))
+    WHERE investor_id IS NULL AND TRIM(COALESCE(investor_name,'')) <> ''
+  `).run();
+}
+
+function createInvestmentIndexes() {
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_investments_investor ON investments(investor_id);
+    CREATE INDEX IF NOT EXISTS idx_investments_payment_method ON investments(payment_method);
+  `);
 }
 
 function seedIfEmpty() {
@@ -191,18 +234,32 @@ function normalizeExpense(d) {
     notes: String(d.notes || '').trim(),
   };
 }
-
-function normalizeInvestment(d) {
-  const allowed = new Set(['owner', 'external', 'loan']);
-  const type = String(d.type || '').trim();
-  if (!allowed.has(type)) throw new Error('Investment type must be owner, external, or loan.');
+function normalizeInvestor(d) {
+  const expected = d.expected_monthly_amount === undefined || d.expected_monthly_amount === ''
+    ? 0
+    : Number(d.expected_monthly_amount);
+  if (!Number.isFinite(expected) || expected < 0) throw new Error('Expected monthly amount cannot be negative.');
   return {
     id: d.id ? Number.parseInt(d.id, 10) : undefined,
-    investor_name: String(d.investor_name || '').trim(),
+    name: ensureText(d.name, 'Investor name', 120),
+    notes: String(d.notes || '').trim(),
+    expected_monthly_amount: Math.round(expected * 100) / 100,
+  };
+}
+
+function normalizeInvestment(d) {
+ const investorId = Number.parseInt(d.investor_id, 10);
+  if (!Number.isInteger(investorId)) throw new Error('Investor is required.');
+  const investor = db.prepare('SELECT id FROM investors WHERE id=?').get(investorId);
+  if (!investor) throw new Error('Investor does not exist.');
+  return {
+    id: d.id ? Number.parseInt(d.id, 10) : undefined,
+    investor_id: investorId,
     amount: positiveAmount(d.amount, 'Investment amount'),
     investment_date: toISODate(d.investment_date, 'Investment date'),
-    type,
+    payment_method: ensureText(d.payment_method || 'cash', 'Payment method', 80),
     notes: String(d.notes || '').trim(),
+        type: String(d.type || 'external').trim() || 'external',
   };
 }
 
@@ -288,14 +345,96 @@ function getExpenseSummary(f = {}) {
   return { total, daily, monthly, yearly, categories };
 }
 
-// ─── INVESTMENTS ─────────────────────────────────────────────────────────────
+// ─── INVESTORS & INVESTMENTS ────────────────────────────────────────────────
+function buildInvestmentFilters(f = {}, alias = 'i') {
+  const parts = [];
+  const params = [];
+  const prefix = alias ? `${alias}.` : '';
+  const date = buildDateFilter(alias, 'investment_date', f);
+  if (date.where) {
+    parts.push(date.where.replace(/^ AND /, ''));
+    params.push(...date.params);
+  }
+  if (f.month) {
+    parts.push(`strftime('%Y-%m', ${prefix}investment_date)=?`);
+    params.push(String(f.month).slice(0, 7));
+  }
+  if (f.year) {
+    parts.push(`strftime('%Y', ${prefix}investment_date)=?`);
+    params.push(String(f.year));
+  }
+  if (f.investor_id) {
+    parts.push(`${prefix}investor_id=?`);
+    params.push(Number.parseInt(f.investor_id, 10));
+  }
+  if (f.payment_method) {
+    parts.push(`${prefix}payment_method=?`);
+    params.push(String(f.payment_method));
+  }
+  return { where: parts.length ? ` AND ${parts.join(' AND ')}` : '', params };
+}
+
+function getInvestors(f = {}) {
+  let q = `
+    SELECT inv.*,
+      COALESCE(SUM(i.amount),0) as total_invested,
+      COUNT(i.id) as investment_count,
+      MAX(i.investment_date) as last_investment_date,
+      COALESCE(SUM(CASE WHEN strftime('%Y-%m', i.investment_date)=strftime('%Y-%m','now') THEN i.amount ELSE 0 END),0) as invested_this_month
+    FROM investors inv
+    LEFT JOIN investments i ON i.investor_id = inv.id
+    WHERE 1=1
+  `;
+  const params = [];
+  if (f.search) {
+    q += ' AND (inv.name LIKE ? OR inv.notes LIKE ?)';
+    params.push(`%${f.search}%`, `%${f.search}%`);
+  }
+  q += ' GROUP BY inv.id ORDER BY inv.name COLLATE NOCASE';
+  return db.prepare(q).all(...params).map((row) => ({
+    ...row,
+    outstanding_this_month: Math.max(0, Number(row.expected_monthly_amount || 0) - Number(row.invested_this_month || 0)),
+  })) || [];
+}
+
+function getInvestorById(id) {
+  return db.prepare('SELECT * FROM investors WHERE id=?').get(id) || null;
+}
+
+function createInvestor(data) {
+  const d = normalizeInvestor(data);
+  const r = db.prepare('INSERT INTO investors (name, notes, expected_monthly_amount) VALUES (?,?,?)')
+    .run(d.name, d.notes, d.expected_monthly_amount);
+  return { success: true, id: r.lastInsertRowid };
+}
+
+function updateInvestor(data) {
+  const d = normalizeInvestor(data);
+  if (!d.id) throw new Error('Investor id is required.');
+  const r = db.prepare('UPDATE investors SET name=?, notes=?, expected_monthly_amount=?, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+    .run(d.name, d.notes, d.expected_monthly_amount, d.id);
+  if (!r.changes) throw new Error('Investor not found.');
+  return { success: true };
+}
+
+function deleteInvestor(id) {
+  const linked = db.prepare('SELECT COUNT(*) as c FROM investments WHERE investor_id=?').get(id).c || 0;
+  if (linked > 0) return { success: false, message: 'Investor has investment records. Delete or reassign those investments first.' };
+  const r = db.prepare('DELETE FROM investors WHERE id=?').run(id);
+  return { success: r.changes > 0, message: r.changes ? undefined : 'Investor not found' };
+}
+
 function getInvestments(f = {}) {
-  let q = 'SELECT * FROM investments WHERE 1=1';
-  const p = [];
-  const date = buildDateFilter('', 'investment_date', f);
-  q += date.where; p.push(...date.params);
-  if (f.type) { q += ' AND type=?'; p.push(f.type); }
-  q += ' ORDER BY investment_date DESC, id DESC';
+ let q = `
+    SELECT i.*, inv.name as investor_name, inv.expected_monthly_amount
+    FROM investments i
+    LEFT JOIN investors inv ON inv.id = i.investor_id
+    WHERE 1=1
+  `;
+  const filters = buildInvestmentFilters(f, 'i');
+  q += filters.where;
+  const p = [...filters.params];
+  q += ' ORDER BY i.investment_date DESC, i.id DESC';
   if (f.limit) { q += ' LIMIT ?'; p.push(Number.parseInt(f.limit, 10)); }
   return db.prepare(q).all(...p) || [];
 }
@@ -303,9 +442,9 @@ function getInvestments(f = {}) {
 function createInvestment(data) {
   const d = normalizeInvestment(data);
   const r = db.prepare(`
-    INSERT INTO investments (investor_name, amount, investment_date, type, notes)
-    VALUES (?,?,?,?,?)
-  `).run(d.investor_name, d.amount, d.investment_date, d.type, d.notes);
+ INSERT INTO investments (investor_id, amount, investment_date, payment_method, notes, type)
+    VALUES (?,?,?,?,?,?)
+  `).run(d.investor_id, d.amount, d.investment_date, d.payment_method, d.notes, d.type);
   return { success: true, id: r.lastInsertRowid };
 }
 
@@ -314,10 +453,10 @@ function updateInvestment(data) {
   if (!d.id) throw new Error('Investment id is required.');
   const r = db.prepare(`
     UPDATE investments
-    SET investor_name=?, amount=?, investment_date=?, type=?, notes=?, updated_at=CURRENT_TIMESTAMP
-    WHERE id=?
-  `).run(d.investor_name, d.amount, d.investment_date, d.type, d.notes, d.id);
-  if (!r.changes) throw new Error('Investment not found.');
+    SET investor_id=?, amount=?, investment_date=?, payment_method=?, notes=?, type=?, updated_at=CURRENT_TIMESTAMP
+        WHERE id=?
+  `).run(d.investor_id, d.amount, d.investment_date, d.payment_method, d.notes, d.type, d.id);
+    if (!r.changes) throw new Error('Investment not found.');
   return { success: true };
 }
 
@@ -327,24 +466,67 @@ function deleteInvestment(id) {
 }
 
 function getInvestmentSummary(f = {}) {
-  const date = buildDateFilter('', 'investment_date', f);
-  const total = db.prepare(`SELECT COALESCE(SUM(amount),0) as total FROM investments WHERE 1=1${date.where}`).get(...date.params).total || 0;
-  const byType = db.prepare(`
-    SELECT type, COALESCE(SUM(amount),0) as total, COUNT(*) as count
-    FROM investments
-    WHERE 1=1${date.where}
-    GROUP BY type
+   const filters = buildInvestmentFilters(f, 'i');
+  const scoped = `FROM investments i LEFT JOIN investors inv ON inv.id = i.investor_id WHERE 1=1${filters.where}`;
+  const params = filters.params;
+  const now = new Date();
+  const currentMonth = now.toISOString().slice(0, 7);
+  const currentYear = String(now.getFullYear());
+  const total = db.prepare(`SELECT COALESCE(SUM(i.amount),0) as total ${scoped}`).get(...params).total || 0;
+  const totalThisMonth = db.prepare(`SELECT COALESCE(SUM(i.amount),0) as total FROM investments i WHERE strftime('%Y-%m', i.investment_date)=?`).get(currentMonth).total || 0;
+  const totalThisYear = db.prepare(`SELECT COALESCE(SUM(i.amount),0) as total FROM investments i WHERE strftime('%Y', i.investment_date)=?`).get(currentYear).total || 0;
+  const byInvestor = db.prepare(`
+    SELECT inv.id as investor_id, inv.name as investor_name, inv.expected_monthly_amount,
+      COALESCE(SUM(i.amount),0) as total, COUNT(i.id) as count, MAX(i.investment_date) as last_investment_date
+    ${scoped}
+    GROUP BY inv.id
+    HAVING inv.id IS NOT NULL AND total > 0
     ORDER BY total DESC
-  `).all(...date.params) || [];
+  `).all(...params) || [];
+  const byType = db.prepare(`
+SELECT i.type, COALESCE(SUM(i.amount),0) as total, COUNT(*) as count
+    ${scoped}
+    GROUP BY i.type
+    ORDER BY total DESC
+ `).all(...params) || [];
   const monthly = db.prepare(`
-    SELECT strftime('%Y-%m', investment_date) as period, COALESCE(SUM(amount),0) as total
-    FROM investments
-    WHERE 1=1${date.where}
+    SELECT strftime('%Y-%m', i.investment_date) as period, COALESCE(SUM(i.amount),0) as total
+    ${scoped}
     GROUP BY period
     ORDER BY period DESC
     LIMIT 24
-  `).all(...date.params) || [];
-  return { total, byType, monthly };
+`).all(...params) || [];
+  const yearly = db.prepare(`
+    SELECT strftime('%Y', i.investment_date) as period, COALESCE(SUM(i.amount),0) as total
+    ${scoped}
+    GROUP BY period
+    ORDER BY period DESC
+    LIMIT 10
+  `).all(...params) || [];
+  const paymentMethods = db.prepare(`
+    SELECT i.payment_method, COALESCE(SUM(i.amount),0) as total, COUNT(*) as count
+    ${scoped}
+    GROUP BY i.payment_method
+    ORDER BY total DESC
+  `).all(...params) || [];
+  const outstanding = db.prepare(`
+    SELECT inv.id as investor_id, inv.name as investor_name, inv.expected_monthly_amount,
+      COALESCE(SUM(CASE WHEN strftime('%Y-%m', i.investment_date)=? THEN i.amount ELSE 0 END),0) as invested_this_month
+    FROM investors inv
+    LEFT JOIN investments i ON i.investor_id = inv.id
+    WHERE inv.expected_monthly_amount > 0
+    GROUP BY inv.id
+    HAVING inv.expected_monthly_amount > invested_this_month
+    ORDER BY (inv.expected_monthly_amount - invested_this_month) DESC
+  `).all(currentMonth).map((row) => ({
+    ...row,
+    outstanding_amount: Number(row.expected_monthly_amount || 0) - Number(row.invested_this_month || 0),
+  })) || [];
+
+  return {
+    total, totalThisMonth, totalThisYear, byInvestor, byType, monthly, yearly, paymentMethods, outstanding,
+    totalInvestors: db.prepare('SELECT COUNT(*) as c FROM investors').get().c || 0,
+  };
 }
 
 function getFinanceOverview() {
@@ -632,6 +814,7 @@ module.exports = {
   getNextInvoiceNumber, createOrder, getOrders, getOrderById,
   deleteOrder,
   getExpenseCategories, createExpenseCategory, getExpenses, createExpense, updateExpense, deleteExpense, getExpenseSummary,
+    getInvestors, getInvestorById, createInvestor, updateInvestor, deleteInvestor,
   getInvestments, createInvestment, updateInvestment, deleteInvestment, getInvestmentSummary, getFinanceOverview,
   getDashboardStats, getRevenueChart, getTopProducts,
   getSalesReport, resetRevenue,

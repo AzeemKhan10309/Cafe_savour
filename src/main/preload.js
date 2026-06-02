@@ -41,6 +41,11 @@ contextBridge.exposeInMainWorld('api', {
   getExpenseSummary: (filters) => ipcRenderer.invoke('expenses:getSummary', filters),
 
   // Investments
+    getInvestors: (filters) => ipcRenderer.invoke('investors:getAll', filters),
+  getInvestorById: (id) => ipcRenderer.invoke('investors:getById', id),
+  createInvestor: (data) => ipcRenderer.invoke('investors:create', data),
+  updateInvestor: (data) => ipcRenderer.invoke('investors:update', data),
+  deleteInvestor: (id) => ipcRenderer.invoke('investors:delete', id),
   getInvestments: (filters) => ipcRenderer.invoke('investments:getAll', filters),
   createInvestment: (data) => ipcRenderer.invoke('investments:create', data),
   updateInvestment: (data) => ipcRenderer.invoke('investments:update', data),

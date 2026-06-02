@@ -59,24 +59,21 @@ function ExpenseModal({ expense, categories, onSave, onClose }) {
   );
 }
 
-function InvestmentModal({ investment, onSave, onClose }) {
-  const [form, setForm] = useState(investment || { investor_name: '', amount: '', investment_date: today(), type: 'owner', notes: '' });
+function InvestmentModal({ investment, investors, onSave, onClose }) {
+  const [form, setForm] = useState(investment || { investor_id: investors[0]?.id || '', amount: '', investment_date: today(), payment_method: 'cash', type: 'external', notes: '' });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   return (
     <Modal title={investment ? '✏️ Edit Investment' : '➕ Add Investment'} onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div className="form-group"><label className="form-label">Investor name</label><input className="input" autoFocus value={form.investor_name || ''} onChange={e => set('investor_name', e.target.value)} placeholder="Owner, partner, bank, etc." /></div>
-        <div className="form-row">
+<div className="form-group"><label className="form-label">Investor *</label><select className="input" autoFocus value={form.investor_id || ''} onChange={e => set('investor_id', e.target.value)}>{investors.map(inv => <option key={inv.id} value={inv.id}>{inv.name}</option>)}</select></div>        <div className="form-row">
           <div className="form-group"><label className="form-label">Amount invested *</label><input className="input" type="number" min="0" step="0.01" value={form.amount} onChange={e => set('amount', e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Type *</label><select className="input" value={form.type} onChange={e => set('type', e.target.value)}>{investmentTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></div>
-        </div>
+          <div className="form-group"><label className="form-label">Payment method *</label><input className="input" value={form.payment_method || 'cash'} onChange={e => set('payment_method', e.target.value)} placeholder="cash, bank transfer, cheque" /></div>        </div>
         <div className="form-group"><label className="form-label">Date *</label><input className="input" type="date" value={form.investment_date} onChange={e => set('investment_date', e.target.value)} /></div>
         <div className="form-group"><label className="form-label">Notes</label><textarea className="input" rows="3" value={form.notes || ''} onChange={e => set('notes', e.target.value)} placeholder="Optional funding details" /></div>
       </div>
       <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
         <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary" style={{ flex: 2, justifyContent: 'center' }} onClick={() => onSave({ ...form, amount: parseFloat(form.amount) })}>{investment ? 'Update Investment' : 'Save Investment'}</button>
-      </div>
+<button className="btn btn-primary" style={{ flex: 2, justifyContent: 'center' }} onClick={() => onSave({ ...form, investor_id: parseInt(form.investor_id, 10), amount: parseFloat(form.amount), type: form.type || 'external' })}>{investment ? 'Update Investment' : 'Save Investment'}</button>      </div>
     </Modal>
   );
 }
@@ -92,6 +89,7 @@ export default function FinancePage() {
   const [investments, setInvestments] = useState([]);
   const [investmentSummary, setInvestmentSummary] = useState({ total: 0, byType: [], monthly: [] });
   const [overview, setOverview] = useState({});
+    const [investors, setInvestors] = useState([]);
   const [editingExpense, setEditingExpense] = useState(null);
   const [editingInvestment, setEditingInvestment] = useState(null);
 
@@ -100,7 +98,7 @@ export default function FinancePage() {
   async function load(nextFilters = filters) {
     setLoading(true);
     try {
-      const [cats, ex, exSum, inv, invSum, fin] = await Promise.all([
+        const [cats, investorRows, ex, exSum, inv, invSum, fin] = await Promise.all([
         window.api.getExpenseCategories(),
         window.api.getExpenses(nextFilters),
         window.api.getExpenseSummary(nextFilters),
@@ -108,8 +106,7 @@ export default function FinancePage() {
         window.api.getInvestmentSummary(nextFilters),
         window.api.getFinanceOverview(),
       ]);
-      setCategories(cats); setExpenses(ex); setExpenseSummary(exSum); setInvestments(inv); setInvestmentSummary(invSum); setOverview(fin);
-    } catch (err) {
+setCategories(cats); setInvestors(investorRows); setExpenses(ex); setExpenseSummary(exSum); setInvestments(inv); setInvestmentSummary(invSum); setOverview(fin);    } catch (err) {
       console.error(err);
       showToast(err.message || 'Failed to load finance data', 'error');
     } finally {
@@ -190,12 +187,10 @@ export default function FinancePage() {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>{investmentTypes.map(t => <StatCard key={t.value} icon={t.value === 'loan' ? '🏛️' : t.value === 'external' ? '🤝' : '👤'} label={t.label} value={fmt(typeTotals[t.value])} color="#10B981" />)}</div>
           <div className="card"><h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Monthly Capital Added</h3><ResponsiveContainer width="100%" height={230}><BarChart data={[...investmentSummary.monthly].reverse()}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)" /><XAxis dataKey="period" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} /><YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} /><Tooltip formatter={v => fmt(v)} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }} /><Bar dataKey="total" fill="#10B981" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}><table className="table"><thead><tr><th>Date</th><th>Investor</th><th>Type</th><th>Notes</th><th>Amount</th><th>Actions</th></tr></thead><tbody>{investments.map(i => <tr key={i.id}><td>{i.investment_date}</td><td style={{ fontWeight: 700 }}>{i.investor_name || '—'}</td><td><span className="badge badge-success">{investmentTypes.find(t => t.value === i.type)?.label || i.type}</span></td><td style={{ color: 'var(--text-muted)' }}>{i.notes || '—'}</td><td style={{ fontFamily: 'monospace', fontWeight: 800 }}>{fmt(i.amount)}</td><td><button className="btn btn-ghost btn-sm" onClick={() => setEditingInvestment(i)}>Edit</button> <button className="btn btn-danger btn-sm" onClick={() => removeInvestment(i)}>Delete</button></td></tr>)}</tbody></table>{!investments.length && <div style={{ padding: 36, textAlign: 'center', color: 'var(--text-dim)' }}>No investments for selected period.</div>}</div>
-        </>
+<div className="card" style={{ padding: 0, overflow: 'hidden' }}><table className="table"><thead><tr><th>Date</th><th>Investor</th><th>Payment</th><th>Notes</th><th>Amount</th><th>Actions</th></tr></thead><tbody>{investments.map(i => <tr key={i.id}><td>{i.investment_date}</td><td style={{ fontWeight: 700 }}>{i.investor_name || '—'}</td><td><span className="badge badge-success">{i.payment_method || '—'}</span></td><td style={{ color: 'var(--text-muted)' }}>{i.notes || '—'}</td><td style={{ fontFamily: 'monospace', fontWeight: 800 }}>{fmt(i.amount)}</td><td><button className="btn btn-ghost btn-sm" onClick={() => setEditingInvestment(i)}>Edit</button> <button className="btn btn-danger btn-sm" onClick={() => removeInvestment(i)}>Delete</button></td></tr>)}</tbody></table>{!investments.length && <div style={{ padding: 36, textAlign: 'center', color: 'var(--text-dim)' }}>No investments for selected period.</div>}</div>        </>
       )}
 
       {editingExpense && <ExpenseModal expense={editingExpense.id ? editingExpense : null} categories={categories} onSave={saveExpense} onClose={() => setEditingExpense(null)} />}
-      {editingInvestment && <InvestmentModal investment={editingInvestment.id ? editingInvestment : null} onSave={saveInvestment} onClose={() => setEditingInvestment(null)} />}
-    </div>
+ {editingInvestment && <InvestmentModal investment={editingInvestment.id ? editingInvestment : null} investors={investors} onSave={saveInvestment} onClose={() => setEditingInvestment(null)} />}    </div>
   );
 }

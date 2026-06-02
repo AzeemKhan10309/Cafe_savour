@@ -19,6 +19,7 @@ export default function Layout() {
       { to: '/inventory', label: 'Inventory', icon: '📦' },
       { to: '/reports',   label: 'Reports',   icon: '📈' },
       { to: '/finance',   label: 'Finance',   icon: '💰' },
+      { to: '/investments', label: 'Investors', icon: '🏦' },
       { to: '/staff',     label: 'Staff',     icon: '👥' },
     ] : []),
   ];

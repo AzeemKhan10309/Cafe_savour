@@ -120,6 +120,11 @@ function registerIPC() {
   ipcMain.handle('expenses:getSummary', (_, filters) => db.getExpenseSummary(filters));
 
   // INVESTMENTS
+  ipcMain.handle('investors:getAll', (_, filters) => db.getInvestors(filters));
+  ipcMain.handle('investors:getById', (_, id) => db.getInvestorById(id));
+  ipcMain.handle('investors:create', (_, data) => db.createInvestor(data));
+  ipcMain.handle('investors:update', (_, data) => db.updateInvestor(data));
+  ipcMain.handle('investors:delete', (_, id) => db.deleteInvestor(id));
   ipcMain.handle('investments:getAll', (_, filters) => db.getInvestments(filters));
   ipcMain.handle('investments:create', (_, data) => db.createInvestment(data));
   ipcMain.handle('investments:update', (_, data) => db.updateInvestment(data));
