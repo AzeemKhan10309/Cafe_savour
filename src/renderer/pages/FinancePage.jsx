@@ -100,14 +100,21 @@ export default function FinancePage() {
     try {
         const [cats, investorRows, ex, exSum, inv, invSum, fin] = await Promise.all([
         window.api.getExpenseCategories(),
+        window.api.getInvestors(),
         window.api.getExpenses(nextFilters),
         window.api.getExpenseSummary(nextFilters),
         window.api.getInvestments(nextFilters),
         window.api.getInvestmentSummary(nextFilters),
         window.api.getFinanceOverview(),
       ]);
-setCategories(cats); setInvestors(investorRows); setExpenses(ex); setExpenseSummary(exSum); setInvestments(inv); setInvestmentSummary(invSum); setOverview(fin);    } catch (err) {
-      console.error(err);
+      setCategories(cats);
+      setInvestors(investorRows);
+      setExpenses(ex);
+      setExpenseSummary(exSum);
+      setInvestments(inv);
+      setInvestmentSummary(invSum);
+      setOverview(fin);
+    } catch (err) {      console.error(err);
       showToast(err.message || 'Failed to load finance data', 'error');
     } finally {
       setLoading(false);
