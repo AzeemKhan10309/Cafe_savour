@@ -70,14 +70,20 @@ export default function App() {
 
   const login = async (username, password) => {
     if (!window.api) return { success: false, message: 'App not ready, please wait a moment' };
-    const r = await window.api.login({ username, password });
-    if (!r.success) return { success: false, message: r.message };
-    // Only admin and cashier are allowed — block everything else
-    if (r.user.role !== 'admin' && r.user.role !== 'cashier') {
-      return { success: false, message: 'Your role is not allowed to access this system.' };
+     try {
+      const r = await window.api.login({ username: username.trim(), password });
+      if (!r?.success) return { success: false, message: r?.message || 'Login failed' };
+      // Only admin and cashier are allowed — block everything else
+      if (r.user.role !== 'admin' && r.user.role !== 'cashier') {
+        return { success: false, message: 'Your role is not allowed to access this system.' };
+      }
+      setUser(r.user);
+      return { success: true };
+    } catch (error) {
+      console.error('Login failed:', error);
+      return { success: false, message: error?.message || 'Unable to sign in. Please restart the app and try again.' }
     }
-    setUser(r.user);
-    return { success: true };
+
   };
 
   const logout = () => { setUser(null); showToast('Logged out', 'info'); };

@@ -10,11 +10,23 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!form.username || !form.password) return setError('Please enter username and password');
-    setLoading(true); setError('');
-    const r = await login(form.username, form.password);
-    if (!r.success) setError(r.message || 'Login failed');
-    setLoading(false);
+    if (loading) return;
+
+    const username = form.username.trim();
+    if (!username || !form.password) return setError('Please enter username and password');
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const r = await login(username, form.password);
+      if (!r?.success) setError(r?.message || 'Login failed');
+    } catch (error) {
+      console.error('Sign-in error:', error);
+      setError(error?.message || 'Unable to sign in. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const onKey = e => e.key === 'Enter' && handleSubmit();
