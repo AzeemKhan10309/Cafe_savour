@@ -131,6 +131,26 @@ function registerIPC() {
   ipcMain.handle('investments:delete', (_, id) => db.deleteInvestment(id));
   ipcMain.handle('investments:getSummary', (_, filters) => db.getInvestmentSummary(filters));
   ipcMain.handle('finance:getOverview', () => db.getFinanceOverview());
+
+    // KITCHEN INVENTORY
+  ipcMain.handle('kitchen:getDashboard', () => db.getKitchenDashboard());
+  ipcMain.handle('kitchen:ingredients:getAll', () => db.getKitchenIngredients());
+  ipcMain.handle('kitchen:ingredients:create', (_, data) => db.createKitchenIngredient(data));
+  ipcMain.handle('kitchen:ingredients:update', (_, data) => db.updateKitchenIngredient(data));
+  ipcMain.handle('kitchen:ingredients:delete', (_, id) => db.deleteKitchenIngredient(id));
+  ipcMain.handle('kitchen:purchases:getAll', (_, filters) => db.getKitchenPurchases(filters));
+  ipcMain.handle('kitchen:purchases:create', (_, data) => db.createKitchenPurchase(data));
+  ipcMain.handle('kitchen:vouchers:getAll', (_, filters) => db.getKitchenIssueVouchers(filters));
+  ipcMain.handle('kitchen:vouchers:create', (_, data) => db.createKitchenIssueVoucher(data));
+  ipcMain.handle('kitchen:vouchers:approve', (_, data) => db.approveKitchenIssueVoucher(data.id, data.actor));
+  ipcMain.handle('kitchen:waste:getAll', (_, filters) => db.getKitchenWaste(filters));
+  ipcMain.handle('kitchen:waste:create', (_, data) => db.createKitchenWaste(data));
+  ipcMain.handle('kitchen:recipes:getAll', () => db.getKitchenRecipes());
+  ipcMain.handle('kitchen:recipes:save', (_, data) => db.saveKitchenRecipe(data));
+  ipcMain.handle('kitchen:recipes:delete', (_, id) => db.deleteKitchenRecipe(id));
+  ipcMain.handle('kitchen:movements:getAll', (_, filters) => db.getKitchenStockMovements(filters));
+  ipcMain.handle('kitchen:reports:getAll', (_, filters) => db.getKitchenReports(filters));
+  ipcMain.handle('kitchen:audit:getAll', (_, filters) => db.getKitchenAuditLogs(filters));
   // DASHBOARD
   ipcMain.handle('dashboard:getStats', () => db.getDashboardStats());
   ipcMain.handle('dashboard:getRevenueChart', (_, days) => db.getRevenueChart(days));

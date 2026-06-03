@@ -16,7 +16,8 @@ export default function Layout() {
     { to: '/',         label: 'Dashboard', icon: '📊', end: true },
     { to: '/pos',      label: 'POS Billing', icon: '🛒' },
     ...(isAdmin ? [
-      { to: '/inventory', label: 'Inventory', icon: '📦' },
+      { to: '/inventory', label: 'POS Inventory', icon: '📦' },
+      { to: '/kitchen-inventory', label: 'Kitchen Inventory', icon: '🥘' },
       { to: '/reports',   label: 'Reports',   icon: '📈' },
       { to: '/finance',   label: 'Finance',   icon: '💰' },
       { to: '/investments', label: 'Investors', icon: '🏦' },

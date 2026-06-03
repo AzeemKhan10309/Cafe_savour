@@ -9,7 +9,7 @@ import StaffPage    from './pages/StaffPage';
 import ReportsPage  from './pages/ReportsPage';
 import FinancePage  from './pages/FinancePage';
 import InvestmentsPage from './pages/InvestmentsPage';
-
+import KitchenInventoryPage from './pages/KitchenInventoryPage';
 export const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
 
@@ -106,6 +106,7 @@ export default function App() {
             <Route path="inventory" element={<InventoryPage />} />
 
             {/* Admin-only pages */}
+            <Route path="kitchen-inventory" element={<AdminOnly><KitchenInventoryPage /></AdminOnly>} />
             <Route path="reports" element={<AdminOnly><ReportsPage /></AdminOnly>} />
             <Route path="finance" element={<AdminOnly><FinancePage /></AdminOnly>} />
             <Route path="investments" element={<AdminOnly><InvestmentsPage /></AdminOnly>} />
