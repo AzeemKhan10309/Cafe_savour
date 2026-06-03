@@ -181,9 +181,10 @@ export default function POSPage() {
       const printedInSimulation = printResult?.success &&  printResult?.simulated;
       const printFailed         = printResult && !printResult.success;
 
-      if (printedOnDevice)          showToast(`✅ Order ${invoiceNo} complete & printed!`);
-      else if (printedInSimulation) showToast(`✅ Order ${invoiceNo} complete (printer simulation mode)`);
-      else if (printFailed)         showToast(`⚠️ Order saved but receipt print failed: ${printResult.message || 'Unknown printer error'}`, 'error');
+       const printerWarning = printResult?.warnings?.length ? ` ${printResult.warnings.join(' ')}` : '';
+      if (printedOnDevice)          showToast(`✅ Order ${invoiceNo} complete & printed on ${printResult.printerName || 'printer'}!${printerWarning}`);
+      else if (printedInSimulation) showToast(`✅ Order ${invoiceNo} complete (printer simulation mode)${printerWarning}`);
+      else if (printFailed)         showToast(`⚠️ Order saved but receipt print failed: ${printResult.message || 'Unknown printer error'}${printerWarning}`, 'error');
       else                          showToast(`✅ Order ${invoiceNo} complete!`);
 
       clearCart(); setShowCheckout(false);

@@ -1103,7 +1103,17 @@ function updateStaff(d) {
 }
 
 function deleteStaff(id) { db.prepare('UPDATE staff SET active=0 WHERE id=?').run(id); return {success:true}; }
+// ─── SETTINGS ─────────────────────────────────────────────────────────────────
+function getSetting(key) {
+  const row = db.prepare('SELECT value FROM settings WHERE key=?').get(key);
+  return row ? row.value : null;
+}
 
+function setSetting(key, value) {
+  db.prepare('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
+    .run(key, value == null ? '' : String(value));
+  return { success: true, key, value: value == null ? '' : String(value) };
+}
 // ─── ORDERS ───────────────────────────────────────────────────────────────────
 function getNextInvoiceNumber() {
   const last = db.prepare('SELECT invoice_number FROM orders ORDER BY id DESC LIMIT 1').get();
@@ -1258,6 +1268,7 @@ module.exports = {
   initialize, login,
   getAllProducts, createProduct, updateProduct, deleteProduct, getLowStockProducts,
   getAllCategories, createCategory, deleteCategory,
+    getSetting, setSetting,
   getAllStaff, createStaff, updateStaff, deleteStaff,
   getNextInvoiceNumber, createOrder, getOrders, getOrderById,
   deleteOrder,

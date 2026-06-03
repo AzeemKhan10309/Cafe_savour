@@ -22,6 +22,7 @@ export default function Layout() {
       { to: '/finance',   label: 'Finance',   icon: '💰' },
       { to: '/investments', label: 'Investors', icon: '🏦' },
       { to: '/staff',     label: 'Staff',     icon: '👥' },
+            { to: '/printer-settings', label: 'Printer Settings', icon: '🖨️' },
     ] : []),
   ];
 

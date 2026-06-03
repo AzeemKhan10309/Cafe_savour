@@ -178,6 +178,8 @@ function registerIPC() {
 
   // PRINTER
   ipcMain.handle('printer:listDevices', () => printerService.listUSBDevices());
+    ipcMain.handle('printer:getSettings', () => printerService.getPrinterSettings());
+  ipcMain.handle('printer:saveSettings', (_, printerName) => printerService.savePrinterSettings(printerName));
   ipcMain.handle('printer:printReceipt', (_, data) => printerService.printReceipt(data));
   ipcMain.handle('printer:testPrint', () => printerService.testPrint());
 }

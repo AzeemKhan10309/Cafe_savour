@@ -85,6 +85,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Printer
   listUSBDevices: () => ipcRenderer.invoke('printer:listDevices'),
+    getPrinterSettings: () => ipcRenderer.invoke('printer:getSettings'),
+  savePrinterSettings: (printerName) => ipcRenderer.invoke('printer:saveSettings', printerName),
   printReceipt: (data) => ipcRenderer.invoke('printer:printReceipt', data),
   testPrint: () => ipcRenderer.invoke('printer:testPrint'),
 });

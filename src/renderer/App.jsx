@@ -10,6 +10,7 @@ import ReportsPage  from './pages/ReportsPage';
 import FinancePage  from './pages/FinancePage';
 import InvestmentsPage from './pages/InvestmentsPage';
 import KitchenInventoryPage from './pages/KitchenInventoryPage';
+import PrinterSettingsPage from './pages/PrinterSettingsPage';
 export const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
 
@@ -111,6 +112,7 @@ export default function App() {
             <Route path="finance" element={<AdminOnly><FinancePage /></AdminOnly>} />
             <Route path="investments" element={<AdminOnly><InvestmentsPage /></AdminOnly>} />
             <Route path="staff"   element={<AdminOnly><StaffPage /></AdminOnly>} />
+                        <Route path="printer-settings" element={<AdminOnly><PrinterSettingsPage /></AdminOnly>} />
           </Route>
 
           <Route path="*" element={<Navigate to={user ? '/' : '/login'} replace />} />
