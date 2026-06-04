@@ -1,22 +1,62 @@
 const Database = require('better-sqlite3');
 const bcrypt   = require('bcryptjs');
 const path     = require('path');
-const { app }  = require('electron');
+function getElectronApp() {
+  try {
+    return require('electron').app;
+  } catch (error) {
+    console.warn('Electron app module is unavailable; using local database path.', error.message);
+    return undefined;
+  }
+}
 
-const dbPath = app
-  ? path.join(app.getPath('userData'), 'cafepos.db')
-  : path.join(__dirname, '../../../cafepos.db');
+function getDbPath() {
+  const app = getElectronApp();
+  return app
+    ? path.join(app.getPath('userData'), 'cafepos.db')
+    : path.join(__dirname, '../../../cafepos.db');
+}
 
 let db;
-
+let initializationError;
+let initialized = false;
 function initialize() {
-  db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-  createTables();
-  migrateSchema();
+  if (initialized && db) return db;
+
+  try {
+    if (!db) {
+      db = new Database(getDbPath());
+    }
+
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    createTables();
+    migrateSchema();
     seedExpenseCategories();
   seedIfEmpty();
+  initialized = true;
+    initializationError = undefined;
+    return db;
+  } catch (error) {
+    initializationError = error;
+    initialized = false;
+    throw error;
+  }
+}
+
+function ensureInitialized() {
+  if (initialized && db) return db;
+
+  try {
+    return initialize();
+  } catch (error) {
+    const details = error && error.message ? `: ${error.message}` : '';
+    throw new Error(`Database is not available${details}`);
+  }
+}
+
+function getInitializationError() {
+  return initializationError;
 }
 
 function createTables() {
@@ -998,11 +1038,18 @@ function getKitchenAuditLogs(f = {}) {
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 function login(username, password) {
-  const user = db.prepare('SELECT * FROM staff WHERE username = ? AND active = 1').get(username);
-  if (!user || !bcrypt.compareSync(password, user.password)) 
-    return { success:false, message:'Invalid username or password' };
-  const { password:_, ...safe } = user;
-  return { success:true, user:safe };
+  try {
+    const database = ensureInitialized();
+    const user = database.prepare('SELECT * FROM staff WHERE username = ? AND active = 1').get(username);
+    if (!user || !bcrypt.compareSync(password, user.password)) {
+      return { success: false, message: 'Invalid username or password' };
+    }
+    const { password: _, ...safe } = user;
+    return { success: true, user: safe };
+  } catch (error) {
+    console.error('Login failed because the database is unavailable:', error);
+    return { success: false, message: error.message || 'Database is not available' };
+  }
 }
 
 // ─── PRODUCTS ─────────────────────────────────────────────────────────────────
@@ -1265,7 +1312,7 @@ function resetRevenue() {
 }
 
 module.exports = {
-  initialize, login,
+ initialize, ensureInitialized, getInitializationError, login,
   getAllProducts, createProduct, updateProduct, deleteProduct, getLowStockProducts,
   getAllCategories, createCategory, deleteCategory,
     getSetting, setSetting,
