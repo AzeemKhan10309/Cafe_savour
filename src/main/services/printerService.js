@@ -10,10 +10,12 @@ const MAX_PRINT_ATTEMPTS = 3;
 // ─── PRINT LOCK (QUEUE SYSTEM) ───────────────────────────────────────────────
 let _printLock = false;
 const _queue = [];
+
 function log(message, payload) {
   if (payload !== undefined) console.log(LOG_PREFIX, message, payload);
   else console.log(LOG_PREFIX, message);
 }
+
 function acquireLock() {
   return new Promise((resolve) => {
     const tryLock = () => {
@@ -63,7 +65,7 @@ function isPrinterUsable(printer) {
   const status = String(printer.status || '').toLowerCase();
   const statusDescription = String(printer.statusDescription || '').toLowerCase();
   if (printer.workOffline) return false;
-  if (['offline', 'error', 'unknown'].includes(status)) return false;
+  if (['offline', 'error'].includes(status)) return false;
   if (statusDescription.includes('offline') || statusDescription.includes('error')) return false;
   return true;
 }
@@ -76,9 +78,12 @@ function parseJsonArray(stdout) {
 }
 
 // ─── PRINTER LIST ────────────────────────────────────────────────────────────
-// Uses Get-Printer as the source of installed Windows printers. Win32_Printer is
-// only joined to enrich the records with the Windows default-printer flag because
-// Get-Printer output differs slightly between Windows 10 and Windows 11 builds.
+// Uses Get-Printer as the primary source of installed Windows printers and
+// enriches each record with the Win32_Printer default flag.
+//
+// IMPORTANT: every hashtable value below is a simple expression (no bare inline
+// `if`), which is what previously caused a PowerShell parse error and an empty
+// printer list. Conditional values are computed with separate variables first.
 async function listPrinters() {
   if (process.platform !== 'win32') {
     log('Printer detection skipped because this operating system is not Windows.');
@@ -87,35 +92,125 @@ async function listPrinters() {
 
   const script = `
     $ErrorActionPreference = 'Stop'
-    $installed = @(Get-Printer | Select-Object Name, PrinterStatus, WorkOffline, Type, PortName, Shared, ShareName)
-    $win32 = @(Get-CimInstance Win32_Printer | Select-Object Name, Default, WorkOffline, PrinterStatus)
-    $printers = foreach ($printer in $installed) {
-      $match = $win32 | Where-Object { $_.Name -ieq $printer.Name } | Select-Object -First 1
-      [PSCustomObject]@{
-        name = [string]$printer.Name
-        status = [string]$printer.PrinterStatus
-        statusDescription = if ($match) { [string]$match.PrinterStatus } else { [string]$printer.PrinterStatus }
-        workOffline = [bool](if ($printer.WorkOffline -ne $null) { $printer.WorkOffline } elseif ($match) { $match.WorkOffline } else { $false })
-        isDefault = [bool](if ($match) { $match.Default } else { $false })
-        type = [string]$printer.Type
-        portName = [string]$printer.PortName
-        shared = [bool]$printer.Shared
-        shareName = [string]$printer.ShareName
+
+    function Convert-PrinterStatusName([object]$value) {
+      if ($null -eq $value) { return '' }
+      $text = [string]$value
+      switch ($text) {
+        '0' { return 'Ready' }
+        '1' { return 'Other' }
+        '2' { return 'Unknown' }
+        '3' { return 'Ready' }
+        '4' { return 'Printing' }
+        '5' { return 'Warmup' }
+        default { return $text }
       }
     }
-    $printers | ConvertTo-Json -Depth 4
+
+    $installed = @()
+    try {
+      $installed = @(Get-Printer -ErrorAction Stop | Select-Object Name, PrinterStatus, WorkOffline, Type, PortName, Shared, ShareName)
+    } catch {
+      $installed = @()
+    }
+
+    $win32 = @()
+    try {
+      $win32 = @(Get-CimInstance Win32_Printer -ErrorAction Stop | Select-Object Name, Default, WorkOffline, PrinterStatus, PortName, Shared, ShareName, Network)
+    } catch {
+      try {
+        $win32 = @(Get-WmiObject Win32_Printer -ErrorAction Stop | Select-Object Name, Default, WorkOffline, PrinterStatus, PortName, Shared, ShareName, Network)
+      } catch {
+        $win32 = @()
+      }
+    }
+
+    $names = @(@($installed | ForEach-Object { $_.Name }) + @($win32 | ForEach-Object { $_.Name })) | Where-Object { $_ } | Sort-Object -Unique
+
+    $printers = foreach ($name in $names) {
+      $printer = $installed | Where-Object { $_.Name -ieq $name } | Select-Object -First 1
+      $match   = $win32     | Where-Object { $_.Name -ieq $name } | Select-Object -First 1
+
+      # --- status ---
+      $rawStatus = $null
+      if ($printer) { $rawStatus = $printer.PrinterStatus }
+      elseif ($match) { $rawStatus = $match.PrinterStatus }
+      $status = Convert-PrinterStatusName $rawStatus
+
+      $statusDescription = $status
+      if ($match) { $statusDescription = Convert-PrinterStatusName $match.PrinterStatus }
+
+      # --- work offline ---
+      $workOffline = $false
+      if ($printer -and $null -ne $printer.WorkOffline) { $workOffline = [bool]$printer.WorkOffline }
+      elseif ($match -and $null -ne $match.WorkOffline) { $workOffline = [bool]$match.WorkOffline }
+
+      # --- default ---
+      $isDefault = $false
+      if ($match -and $match.Default) { $isDefault = $true }
+
+      # --- type ---
+      $type = ''
+      if ($printer -and $printer.Type) { $type = [string]$printer.Type }
+      elseif ($match -and $match.Network) { $type = 'Network' }
+
+      # --- port ---
+      $portName = ''
+      if ($printer) { $portName = [string]$printer.PortName }
+      elseif ($match) { $portName = [string]$match.PortName }
+
+      # --- shared ---
+      $shared = $false
+      if ($printer -and $printer.Shared) { $shared = $true }
+      elseif ($match -and $match.Shared) { $shared = $true }
+
+      # --- share name ---
+      $shareName = ''
+      if ($printer) { $shareName = [string]$printer.ShareName }
+      elseif ($match) { $shareName = [string]$match.ShareName }
+
+      [PSCustomObject]@{
+        name              = [string]$name
+        status            = [string]$status
+        statusDescription = [string]$statusDescription
+        workOffline       = [bool]$workOffline
+        isDefault         = [bool]$isDefault
+        type              = [string]$type
+        portName          = [string]$portName
+        shared            = [bool]$shared
+        shareName         = [string]$shareName
+      }
+    }
+
+    if ($printers) { @($printers) | ConvertTo-Json -Depth 4 } else { '[]' }
   `;
 
   try {
     const { stdout } = await runPowerShell(script);
-    const printers = parseJsonArray(stdout).map((printer) => ({
-      ...printer,
-      usable: isPrinterUsable(printer),
-    }));
-    log('Available printers detected:', printers.map((p) => ({ name: p.name, isDefault: p.isDefault, usable: p.usable, status: p.status, offline: p.workOffline })));
+    const printers = parseJsonArray(stdout)
+      .filter((printer) => printer?.name)
+      .map((printer) => ({
+        ...printer,
+        usable: isPrinterUsable(printer),
+      }));
+    log(
+      'Available printers detected:',
+      printers.map((p) => ({
+        name: p.name,
+        isDefault: p.isDefault,
+        usable: p.usable,
+        status: p.status,
+        offline: p.workOffline,
+      }))
+    );
     return printers;
   } catch (err) {
-    log('Windows returned an error while detecting printers:', { message: err.message, stderr: err.stderr });
+    // Surface the real reason (raw stdout/stderr) instead of silently failing.
+    log('Windows returned an error while detecting printers:', {
+      message: err.message,
+      stderr: err.stderr,
+      stdout: err.stdout,
+    });
     return [];
   }
 }
@@ -130,19 +225,21 @@ function matchSavedPrinter(savedName, printers) {
   // while still avoiding hardcoded paths, IP addresses, or share names.
   const savedNormalized = normalizePrinterName(savedName);
   if (!savedNormalized) return null;
-  return printers.find((printer) => {
-    const currentNormalized = normalizePrinterName(printer.name);
-    return currentNormalized.includes(savedNormalized) || savedNormalized.includes(currentNormalized);
-  }) || null;
+  return (
+    printers.find((printer) => {
+      const currentNormalized = normalizePrinterName(printer.name);
+      return currentNormalized.includes(savedNormalized) || savedNormalized.includes(currentNormalized);
+    }) || null
+  );
 }
 
 async function detectPrinter(preferredPrinterName = null) {
   const printers = await listPrinters();
- const savedPrinterName = preferredPrinterName || printerSettings.getSelectedPrinterName();
+  const savedPrinterName = preferredPrinterName || printerSettings.getSelectedPrinterName();
   const warnings = [];
 
   if (!printers.length) {
-    warnings.push('No Windows printers are installed. Install a printer or check Windows printer settings.');
+    warnings.push('No Windows printers were detected. Install a printer, enable the Windows Print Spooler, or check Windows printer settings.');
     log('No printers installed.');
     return { printer: null, printers, selectedPrinterName: savedPrinterName, source: 'none', warnings };
   }
@@ -158,14 +255,13 @@ async function detectPrinter(preferredPrinterName = null) {
     log('Saved printer unavailable; falling back.', { savedPrinterName });
   }
 
-
-const defaultPrinter = printers.find((printer) => printer.isDefault && isPrinterUsable(printer));
+  const defaultPrinter = printers.find((printer) => printer.isDefault && isPrinterUsable(printer));
   if (defaultPrinter) {
     log('Selected Windows default printer:', defaultPrinter.name);
     return { printer: defaultPrinter, printers, selectedPrinterName: savedPrinterName, source: 'default', warnings };
   }
 
- const firstUsablePrinter = printers.find(isPrinterUsable);
+  const firstUsablePrinter = printers.find(isPrinterUsable);
   if (firstUsablePrinter) {
     warnings.push('Windows default printer is unavailable. Using the first available printer.');
     log('Selected first available printer:', firstUsablePrinter.name);
@@ -189,14 +285,12 @@ function classifyPrintError(error) {
 // ─── RAW PRINT (ESC/POS) ─────────────────────────────────────────────────────
 function printRaw(printerName, text) {
   return new Promise((resolve, reject) => {
-const tempFile = path.join(os.tmpdir(), `receipt_${process.pid}_${Date.now()}.bin`);
+    const tempFile = path.join(os.tmpdir(), `receipt_${process.pid}_${Date.now()}.bin`);
     const psFile = path.join(os.tmpdir(), `receipt_print_${process.pid}_${Date.now()}.ps1`);
 
     const ESC = '\x1B';
-    const GS  = '\x1D';
- // ESC/POS command sequence is intentionally unchanged: initialize, center,
-    // receipt content, feed, and cut. Only the delivery mechanism changed from a
-    // hardcoded UNC copy path to Windows spooler RAW printing by detected name.
+    const GS = '\x1D';
+    // ESC/POS command sequence: initialize, center, receipt content, feed, and cut.
     const data =
       ESC + '@' +
       ESC + 'a' + '\x01' +
@@ -205,7 +299,8 @@ const tempFile = path.join(os.tmpdir(), `receipt_${process.pid}_${Date.now()}.bi
       GS + 'V' + '\x41' + '\x10';
 
     fs.writeFileSync(tempFile, data, 'binary');
- const psScript = `
+
+    const psScript = `
 param([string]$PrinterName, [string]$DataFile)
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
@@ -230,7 +325,16 @@ public class RawPrinterHelper {
   public static extern bool WritePrinter(IntPtr hPrinter, byte[] pBytes, int dwCount, out int dwWritten);
 }
 '@
-$printer = Get-Printer -Name $PrinterName -ErrorAction Stop
+$printer = $null
+try {
+  $printer = Get-Printer -Name $PrinterName -ErrorAction Stop
+} catch {
+  try {
+    $printer = Get-CimInstance Win32_Printer -ErrorAction Stop | Where-Object { $_.Name -ieq $PrinterName } | Select-Object -First 1
+  } catch {
+    $printer = Get-WmiObject Win32_Printer -ErrorAction Stop | Where-Object { $_.Name -ieq $PrinterName } | Select-Object -First 1
+  }
+}
 if ($printer.WorkOffline) { throw "Printer '$PrinterName' is offline." }
 $bytes = [System.IO.File]::ReadAllBytes($DataFile)
 $handle = [IntPtr]::Zero
@@ -252,8 +356,7 @@ try {
 }
 `;
 
-
- fs.writeFileSync(psFile, psScript, 'utf8');
+    fs.writeFileSync(psFile, psScript, 'utf8');
 
     let attempts = 0;
 
@@ -262,10 +365,8 @@ try {
       try { fs.unlinkSync(psFile); } catch {}
     };
 
-    let attempts = 0;
-
     const tryPrint = () => {
-   attempts += 1;
+      attempts += 1;
       log(`Sending print job attempt ${attempts}/${MAX_PRINT_ATTEMPTS}.`, { printerName });
 
       execFile(
@@ -282,13 +383,11 @@ try {
           log('Windows print error:', { message: err.message, stdout, stderr });
           if (attempts < MAX_PRINT_ATTEMPTS) return setTimeout(tryPrint, 1500);
 
-
           cleanup();
           const friendly = classifyPrintError({ ...err, stdout, stderr });
-          reject(new Error(friendly));
+          return reject(new Error(friendly));
         }
-      )
-
+      );
     };
 
     tryPrint();
@@ -327,16 +426,16 @@ function formatReceipt(data) {
 
   const cafeName =
     ESC + 'E' + '\x01' +
-    GS  + '!' + '\x11' +
+    GS + '!' + '\x11' +
     (cafe?.name || 'SAUDI CAFE HOUSE') +
-    GS  + '!' + '\x00' +
+    GS + '!' + '\x00' +
     ESC + 'E' + '\x00';
 
   const thankYou =
     ESC + 'E' + '\x01' +
-    GS  + '!' + '\x11' +
+    GS + '!' + '\x11' +
     '   Thank You Visit Again!   ' +
-    GS  + '!' + '\x00' +
+    GS + '!' + '\x00' +
     ESC + 'E' + '\x00';
 
   const header = [
@@ -353,23 +452,23 @@ function formatReceipt(data) {
     dash,
   ].filter(Boolean);
 
-  const itemLines = items.map((item) => (
+  const itemLines = items.map((item) =>
     padRight(item.product_name.substring(0, 16), 16) +
     padLeft(item.quantity, 4) +
     padLeft(money(item.price), 6) +
     padLeft(money(item.subtotal), 6)
-  ));
+  );
 
-
-    const discountLabel = discountType === 'percent'
+  const discountLabel = discountType === 'percent'
     ? `Discount (${parseFloat(discount || 0).toFixed(0)}%)`
     : 'Discount';
-const footer = [
-  dash,
-`Subtotal : ${money(subtotal)}`,
+
+  const footer = [
+    dash,
+    `Subtotal : ${money(subtotal)}`,
     discountAmount > 0 ? `${discountLabel} : -${money(discountAmount)}` : '',
-    serviceAmount > 0  ? `Service Tax (${parseFloat(serviceRate || 0).toFixed(0)}%) : ${money(serviceAmount)}` : '',
-    taxAmount > 0      ? `VAT Tax (${parseFloat(taxRate || 0).toFixed(0)}%) : ${money(taxAmount)}` : '',
+    serviceAmount > 0 ? `Service Tax (${parseFloat(serviceRate || 0).toFixed(0)}%) : ${money(serviceAmount)}` : '',
+    taxAmount > 0 ? `VAT Tax (${parseFloat(taxRate || 0).toFixed(0)}%) : ${money(taxAmount)}` : '',
     `Total    : ${money(total)}`,
     line,
     thankYou,
@@ -383,7 +482,7 @@ async function printReceipt(data, preferredPrinterName = null) {
   await acquireLock();
 
   try {
-    const printer = await detectPrinter(PRINTER_NAME);
+    const detection = await detectPrinter(preferredPrinterName);
     const text = formatReceipt(data);
 
     if (!detection.printer) {
@@ -396,23 +495,24 @@ async function printReceipt(data, preferredPrinterName = null) {
       };
     }
 
- await printRaw(detection.printer.name, text);
+    await printRaw(detection.printer.name, text);
     await new Promise((resolve) => setTimeout(resolve, 800));
     await printRaw(detection.printer.name, text);
 
-  return {
+    return {
       success: true,
       printerName: detection.printer.name,
       source: detection.source,
       warnings: detection.warnings,
     };
   } catch (err) {
-        log('Print receipt failed:', err.message);
+    log('Print receipt failed:', err.message);
     return { success: false, message: err.message };
   } finally {
     releaseLock();
   }
 }
+
 async function getPrinterSettings() {
   const detection = await detectPrinter();
   return {
@@ -444,7 +544,7 @@ async function testPrint() {
 
 module.exports = {
   printReceipt,
-    printRaw,
+  printRaw,
   detectPrinter,
   listPrinters,
   getPrinterSettings,
