@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const bcrypt   = require('bcryptjs');
 const path     = require('path');
+const { BUSINESS_INFO } = require('../../shared/businessInfo');
 function getElectronApp() {
   try {
     return require('electron').app;
@@ -33,8 +34,9 @@ function initialize() {
     createTables();
     migrateSchema();
     seedExpenseCategories();
-  seedIfEmpty();
-  initialized = true;
+    seedIfEmpty();
+    syncBusinessSettings();
+    initialized = true;
     initializationError = undefined;
     return db;
   } catch (error) {
@@ -342,12 +344,26 @@ function seedIfEmpty() {
   staffStmt.run('Cashier Ali', 'cashier', bcrypt.hashSync('cashier123', 10), 'cashier');
 
   const setSetting = db.prepare('INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)');
-  setSetting.run('cafe_name',      'Saudi Saver House');
-  setSetting.run('cafe_address',   'Main Boulevard, Lahore, Pakistan');
-  setSetting.run('cafe_phone',     '+92 300 0000000');
+  setSetting.run('cafe_name',      BUSINESS_INFO.name);
+  setSetting.run('cafe_address',   BUSINESS_INFO.address);
+  setSetting.run('cafe_phone',     BUSINESS_INFO.phone);
   setSetting.run('tax_rate',       '0');
-  setSetting.run('receipt_footer', 'Thank you for visiting Saudi Saver House!');
+  setSetting.run('receipt_footer', BUSINESS_INFO.footer);
   setSetting.run('currency',       'Rs.');
+}
+
+function syncBusinessSettings() {
+  const settings = [
+    ['cafe_name', BUSINESS_INFO.name],
+    ['cafe_address', BUSINESS_INFO.address],
+    ['cafe_phone', BUSINESS_INFO.phone],
+    ['receipt_footer', BUSINESS_INFO.footer],
+  ];
+  const stmt = db.prepare(`
+    INSERT INTO settings (key,value) VALUES (?,?)
+    ON CONFLICT(key) DO UPDATE SET value=excluded.value
+  `);
+  settings.forEach(([key, value]) => stmt.run(key, value));
 }
 
 function seedExpenseCategories() {

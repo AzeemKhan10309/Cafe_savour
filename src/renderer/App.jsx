@@ -11,6 +11,7 @@ import FinancePage  from './pages/FinancePage';
 import InvestmentsPage from './pages/InvestmentsPage';
 import KitchenInventoryPage from './pages/KitchenInventoryPage';
 import PrinterSettingsPage from './pages/PrinterSettingsPage';
+const { BUSINESS_INFO } = require('../shared/businessInfo');
 export const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
 
@@ -30,7 +31,7 @@ function Splash() {
   return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'#0F0F1A', flexDirection:'column', gap:16, fontFamily:'sans-serif', color:'#94A3B8' }}>
       <div style={{ fontSize:52 }}>☕</div>
-      <h2 style={{ color:'#E2E8F0', margin:0, fontSize:22 }}>Saudi Saver House POS</h2>
+     <h2 style={{ color:'#E2E8F0', margin:0, fontSize:22 }}>{BUSINESS_INFO.name} POS</h2>
       <p style={{ margin:0, fontSize:13 }}>Starting up…</p>
       <button onClick={() => window.location.reload()} style={{ marginTop:8, padding:'9px 22px', background:'#4F46E5', color:'#fff', border:'none', borderRadius:8, cursor:'pointer', fontSize:13 }}>Reload</button>
     </div>

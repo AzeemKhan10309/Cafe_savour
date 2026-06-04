@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../App';
 
-const CAFE = { name:'Saudi Savour House', address:'Main Boulevard, Lahore, Pakistan', phone:'+92 346 6262146', footer:'Thank you for visiting Saudi Saver House!' };
+const { BUSINESS_INFO: CAFE } = require('../../shared/businessInfo');
 const fmt  = v => `Rs. ${Number(v||0).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
 
 // ── Smart Icon Function (Offline, Instant) ──
@@ -313,8 +313,8 @@ export default function POSPage() {
   ))}
 
   {/* Halls */}
-  <option value="Saudi Hall">Saudi Hall</option>
-  <option value="Sitting Hall">Sitting Hall</option>
+  <option value="Main Hall">Main Hall</option>
+    <option value="Sitting Hall">Sitting Hall</option>
 </select>          <input className="input" placeholder="Order notes…" value={notes} onChange={e=>setNotes(e.target.value)} style={{ fontSize:12 }} />
           <div style={{ background:'var(--bg)', borderRadius:10, padding:12 }}>
             <TRow label="Subtotal" value={subtotal} />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-
+const { BUSINESS_INFO } = require('../../shared/businessInfo');
 const fmt = v => `Rs. ${Number(v||0).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
 const fmtD = d => new Date(d).toLocaleDateString('en',{month:'short',day:'numeric'});
 
@@ -41,7 +41,7 @@ export default function DashboardPage() {
 
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div>
-          <h1 style={{ fontSize:26, fontWeight:800, letterSpacing:'-0.5px' }}>☕ Saudi Saver House</h1>
+         <h1 style={{ fontSize:26, fontWeight:800, letterSpacing:'-0.5px' }}>☕ {BUSINESS_INFO.name}</h1>
           <p style={{ color:'var(--text-muted)', fontSize:13 }}>{new Date().toLocaleDateString('en-PK',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={loadAll}>🔄 Refresh</button>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../App';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
+const { BUSINESS_INFO } = require('../../shared/businessInfo');
 const fmt = v => `Rs. ${Number(v||0).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
 
 const PRESETS = [
@@ -54,6 +54,34 @@ export default function ReportsPage() {
 
 
   const pickPreset = p => { setPreset(p); setRange(p.get()); };
+async function handleReprintOrder(order) {
+    const fullOrder = await window.api.getOrderById(order.id);
+    if (!fullOrder) return showToast('Order not found', 'error');
+
+    const result = await window.api.printReceipt({
+      cafe: BUSINESS_INFO,
+      invoice: fullOrder.invoice_number,
+      items: fullOrder.items || [],
+      tableName: fullOrder.table_name || '',
+      subtotal: fullOrder.subtotal,
+      discount: fullOrder.discount,
+      discountAmount: fullOrder.discount_type === 'percent'
+        ? Math.min(Number(fullOrder.subtotal || 0) * Number(fullOrder.discount || 0) / 100, Number(fullOrder.subtotal || 0))
+        : Math.min(Number(fullOrder.discount || 0), Number(fullOrder.subtotal || 0)),
+      discountType: fullOrder.discount_type,
+      taxRate: fullOrder.tax_rate,
+      taxAmount: fullOrder.tax_amount,
+      serviceRate: fullOrder.service_rate,
+      serviceAmount: fullOrder.service_amount,
+      total: fullOrder.total,
+      paymentMethod: fullOrder.payment_method,
+      staffName: fullOrder.staff_name,
+      date: new Date(fullOrder.created_at).toLocaleString('en-PK'),
+    });
+
+    if (result?.success) showToast(`Receipt ${fullOrder.invoice_number} reprinted`);
+    else showToast(result?.message || 'Reprint failed', 'error');
+  }
 
   const prodMap = {};
   (data?.items||[]).forEach(i => {
@@ -173,13 +201,16 @@ export default function ReportsPage() {
                         <td><span style={{ textTransform:'uppercase', fontSize:10, fontWeight:700, color:'var(--text-muted)' }}>{o.payment_method}</span></td>
                         <td style={{ fontFamily:'monospace', fontWeight:700 }}>{fmt(o.total)}</td>
                            <td>
-                          <button
-                            className="btn btn-sm"
-                            style={{ background:'rgba(239,68,68,.15)', color:'var(--danger)', border:'none' }}
-                            onClick={() => handleDeleteOrder(o)}
-                          >
-                            Delete
-                          </button>
+ <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                            <button className="btn btn-ghost btn-sm" onClick={() => handleReprintOrder(o)}>Reprint</button>
+                            <button
+                              className="btn btn-sm"
+                              style={{ background:'rgba(239,68,68,.15)', color:'var(--danger)', border:'none' }}
+                              onClick={() => handleDeleteOrder(o)}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
 
                       </tr>

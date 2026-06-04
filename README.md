@@ -267,10 +267,10 @@ UPDATE settings SET value = '10' WHERE key = 'tax_rate';
 
 ### Café Info (appears on receipts)
 ```sql
-UPDATE settings SET value = 'My Café Name' WHERE key = 'cafe_name';
-UPDATE settings SET value = '456 Main St, City' WHERE key = 'cafe_address';
-UPDATE settings SET value = '+1 555-1234' WHERE key = 'cafe_phone';
-UPDATE settings SET value = 'Thanks for your visit!' WHERE key = 'receipt_footer';
+UPDATE settings SET value = 'EAT & MEET CAFE' WHERE key = 'cafe_name';
+UPDATE settings SET value = '19 KM Sheikhupura Lahore Road, Opposite PSO Petrol Pump' WHERE key = 'cafe_address';
+UPDATE settings SET value = '+92 331 4566600' WHERE key = 'cafe_phone';
+UPDATE settings SET value = 'Thank you for visiting EAT & MEET CAFE!' WHERE key = 'receipt_footer';
 ```
 
 ---

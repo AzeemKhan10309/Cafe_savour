@@ -3,7 +3,7 @@ const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
 const printerSettings = require('./printerSettingsService');
-
+const { BUSINESS_INFO } = require('../../shared/businessInfo');
 const LOG_PREFIX = '[PrinterService]';
 const MAX_PRINT_ATTEMPTS = 3;
 
@@ -289,7 +289,7 @@ function printRaw(printerName, text) {
     const psFile = path.join(os.tmpdir(), `receipt_print_${process.pid}_${Date.now()}.ps1`);
 
     const ESC = '\x1B';
-    const GS = '\x1D';
+    
     // ESC/POS command sequence: initialize, center, receipt content, feed, and cut.
     const data =
       ESC + '@' +
@@ -395,6 +395,25 @@ try {
 }
 
 // ─── RECEIPT FORMAT ──────────────────────────────────────────────────────────
+const RECEIPT_WIDTH = 32; // Compatible with common 58mm printers; also safe on 80mm paper.
+
+function centerText(value, width = RECEIPT_WIDTH) {
+  const text = String(value || '').trim();
+  if (text.length >= width) return text;
+  const left = Math.floor((width - text.length) / 2);
+  return `${' '.repeat(left)}${text}`;
+}
+
+function getReceiptBusinessInfo(cafe = {}) {
+  return {
+    ...BUSINESS_INFO,
+    ...cafe,
+    addressLines: cafe.addressLines?.length
+      ? cafe.addressLines
+      : (cafe.address ? String(cafe.address).split(',').map((line) => line.trim()).filter(Boolean) : BUSINESS_INFO.addressLines),
+  };
+}
+
 function formatReceipt(data) {
   const {
     cafe,
@@ -414,34 +433,29 @@ function formatReceipt(data) {
     date,
   } = data;
 
-  const line = '='.repeat(32);
-  const dash = '-'.repeat(32);
+const business = getReceiptBusinessInfo(cafe);
+  const line = '='.repeat(RECEIPT_WIDTH);
+  const dash = '-'.repeat(RECEIPT_WIDTH);
 
   const ESC = '\x1B';
-  const GS = '\x1D';
+   const CENTER = ESC + 'a' + '\x01';
+  const LEFT = ESC + 'a' + '\x00';
+  const BOLD_ON = ESC + 'E' + '\x01';
+  const BOLD_OFF = ESC + 'E' + '\x00';
 
   const padRight = (value, len) => value.toString().padEnd(len, ' ');
   const padLeft = (value, len) => value.toString().padStart(len, ' ');
   const money = (value) => parseFloat(value || 0).toFixed(0);
 
-  const cafeName =
-    ESC + 'E' + '\x01' +
-    GS + '!' + '\x11' +
-    (cafe?.name || 'SAUDI CAFE HOUSE') +
-    GS + '!' + '\x00' +
-    ESC + 'E' + '\x00';
+  const cafeName = `${CENTER}${BOLD_ON}${business.name}${BOLD_OFF}${LEFT}`;
 
-  const thankYou =
-    ESC + 'E' + '\x01' +
-    GS + '!' + '\x11' +
-    '   Thank You Visit Again!   ' +
-    GS + '!' + '\x00' +
-    ESC + 'E' + '\x00';
+  const thankYou = `${CENTER}${BOLD_ON}Thank You Visit Again!${BOLD_OFF}${LEFT}`;
 
   const header = [
+    line,
     cafeName,
-    'Sargodha Rd, Mangowal Garbi',
-    'Ph:03466262146',
+    `${CENTER}${business.phone}${LEFT}`,
+    ...business.addressLines.map((addressLine) => centerText(addressLine)),
     line,
     `Invoice : ${invoice}`,
     tableName ? `Table   : ${tableName}` : '',
@@ -532,7 +546,7 @@ function savePrinterSettings(printerName) {
 
 async function testPrint() {
   return printReceipt({
-    cafe: { name: 'CafePOS' },
+    cafe: BUSINESS_INFO,
     invoice: 'TEST-PRINT',
     items: [{ product_name: 'Printer Test', quantity: 1, price: 0, subtotal: 0 }],
     subtotal: 0,
@@ -550,5 +564,6 @@ module.exports = {
   getPrinterSettings,
   savePrinterSettings,
   testPrint,
+  formatReceipt,
   listUSBDevices: listPrinters,
 };

@@ -1,5 +1,5 @@
 const db = require('../database/db');
-
+const { BUSINESS_INFO } = require('../../shared/businessInfo');
 async function exportPDF(filePath, filters) {
   try {
     const jsPDF = require('jspdf');
@@ -8,26 +8,37 @@ async function exportPDF(filePath, filters) {
     const doc = new PDF();
     const data = db.getSalesReport(filters);
 
+        const pageWidth = doc.internal.pageSize.getWidth();
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(18);
+    doc.text(BUSINESS_INFO.name, pageWidth / 2, 16, { align: 'center' });
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(10);
+    doc.text(BUSINESS_INFO.phone, pageWidth / 2, 23, { align: 'center' });
+    BUSINESS_INFO.addressLines.forEach((line, index) => {
+      doc.text(line, pageWidth / 2, 29 + (index * 5), { align: 'center' });
+    });
+
     doc.setFontSize(20);
-    doc.text('Sales Report', 14, 20);
+    doc.text('Sales Report', 14, 45);
     doc.setFontSize(11);
-    doc.text(`Period: ${filters.start_date || 'All time'} to ${filters.end_date || 'Today'}`, 14, 30);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 37);
+    doc.text(`Period: ${filters.start_date || 'All time'} to ${filters.end_date || 'Today'}`, 14, 55);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 62);
 
     // Summary box
     doc.setFillColor(79, 70, 229);
-    doc.rect(14, 45, 182, 28, 'F');
+    doc.rect(14, 70, 182, 28, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(12);
-    doc.text(`Total Revenue: $${data.totalRevenue.toFixed(2)}`, 20, 55);
-    doc.text(`Total Orders: ${data.orders.length}`, 20, 63);
-    doc.text(`Net Profit: $${data.profit.toFixed(2)}`, 110, 55);
-    doc.text(`Total Cost: $${data.totalCost.toFixed(2)}`, 110, 63);
+    doc.text(`Total Revenue: Rs. ${data.totalRevenue.toFixed(2)}`, 20, 80);
+    doc.text(`Total Orders: ${data.orders.length}`, 20, 88);
+    doc.text(`Net Profit: Rs. ${data.profit.toFixed(2)}`, 110, 80);
+    doc.text(`Total Cost: Rs. ${data.totalCost.toFixed(2)}`, 110, 88);
     doc.setTextColor(0, 0, 0);
 
     // Orders table
     doc.autoTable({
-      startY: 80,
+      startY: 105,
       head: [['Invoice', 'Date', 'Staff', 'Items', 'Payment', 'Total']],
       body: data.orders.map(o => [
         o.invoice_number,
@@ -35,7 +46,7 @@ async function exportPDF(filePath, filters) {
         o.staff_name || 'N/A',
         o.items?.length || 'N/A',
         o.payment_method.toUpperCase(),
-        `$${o.total.toFixed(2)}`,
+        `Rs. ${o.total.toFixed(2)}`,
       ]),
       styles: { fontSize: 9 },
       headStyles: { fillColor: [79, 70, 229] },

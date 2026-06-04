@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../App';
-
+const { BUSINESS_INFO } = require('../../shared/businessInfo');
 const RC = { admin:'#EF4444', cashier:'#10B981' };
 
 function Modal({ onClose, children }) {
@@ -98,8 +98,7 @@ export default function StaffPage() {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div>
           <h1 style={{ fontSize:28, fontWeight:800, letterSpacing:'-0.5px' }}>Staff Management</h1>
-          <p style={{ color:'var(--text-muted)', fontSize:14 }}>{staff.length} members · Saudi Saver House</p>
-        </div>
+          <p style={{ color:'var(--text-muted)', fontSize:14 }}>{staff.length} members · {BUSINESS_INFO.name}</p>        </div>
         <button className="btn btn-primary" onClick={() => { setEditStaff(null); setShowModal(true); }}>+ Add Staff</button>
       </div>
 

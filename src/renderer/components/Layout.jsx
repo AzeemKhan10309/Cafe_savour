@@ -2,7 +2,9 @@ import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../App';
 
-const CAFE = 'Saudi Saver House';
+const { BUSINESS_INFO } = require('../../shared/businessInfo');
+
+const CAFE = BUSINESS_INFO.name;
 
 export default function Layout() {
   const { user, isAdmin, logout } = useApp();
