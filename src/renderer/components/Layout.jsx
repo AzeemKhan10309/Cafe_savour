@@ -1,7 +1,7 @@
 import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useApp } from '../App';
-
+import { getEnabledNavItems } from '../config/modules';
 const { BUSINESS_INFO } = require('../../shared/businessInfo');
 
 const CAFE = BUSINESS_INFO.name;
@@ -12,21 +12,8 @@ export default function Layout() {
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
-  // Cashier only gets Dashboard + POS
-  // Admin gets everything
-  const navItems = [
-    { to: '/',         label: 'Dashboard', icon: '📊', end: true },
-    { to: '/pos',      label: 'POS Billing', icon: '🛒' },
-    ...(isAdmin ? [
-      { to: '/inventory', label: 'POS Inventory', icon: '📦' },
-      { to: '/kitchen-inventory', label: 'Kitchen Inventory', icon: '🥘' },
-      { to: '/reports',   label: 'Reports',   icon: '📈' },
-      { to: '/finance',   label: 'Finance',   icon: '💰' },
-      { to: '/investments', label: 'Investors', icon: '🏦' },
-      { to: '/staff',     label: 'Staff',     icon: '👥' },
-            { to: '/printer-settings', label: 'Printer Settings', icon: '🖨️' },
-    ] : []),
-  ];
+  // Cashier only sees non-admin modules; admin sees every enabled module.
+  const navItems = getEnabledNavItems({ isAdmin });
 
   const roleColor = { admin: '#EF4444', cashier: '#10B981' };
   const rc = roleColor[user?.role] || '#4F46E5';

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { isFeatureEnabled } from '../config/featureFlags';
 const { BUSINESS_INFO } = require('../../shared/businessInfo');
 const fmt = v => `Rs. ${Number(v||0).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
 const fmtD = d => new Date(d).toLocaleDateString('en',{month:'short',day:'numeric'});
@@ -17,6 +18,9 @@ function KPI({ icon, label, value, sub, color }) {
 }
 
 export default function DashboardPage() {
+    const showInventoryWidgets = isFeatureEnabled('INVENTORY');
+  const showFinanceWidgets = isFeatureEnabled('FINANCE');
+  const showInvestorWidgets = isFeatureEnabled('INVESTORS');
   const [stats,    setStats]    = useState(null);
   const [chart,    setChart]    = useState([]);
   const [topProds, setTopProds] = useState([]);
@@ -52,9 +56,15 @@ export default function DashboardPage() {
         <KPI icon="💰" label="Today's Revenue"  value={fmt(stats?.todayStats?.revenue)}   sub={`vs ${fmt(stats?.ystStats?.revenue)} yesterday`} color="#4F46E5" />
         <KPI icon="🛒" label="Today's Orders"   value={stats?.todayStats?.orders||0}       sub="Transactions today"                              color="#10B981" />
         <KPI icon="📅" label="Month Revenue"    value={fmt(stats?.monthStats?.revenue)}    sub={`${stats?.monthStats?.orders||0} orders`}         color="#F59E0B" />
-        <KPI icon="⚠️" label="Low Stock Alerts" value={stats?.lowStock||0}                  sub="Need restocking"                                 color={stats?.lowStock>0?'#EF4444':'#10B981'} />
-        <KPI icon="💸" label="Month Expenses" value={fmt(stats?.monthExpenses)} sub="Operating costs this month" color="#EF4444" />
-        <KPI icon="🏦" label="Total Invested" value={fmt(stats?.totalInvested)} sub="Capital and funding tracked" color="#06B6D4" />
+       {showInventoryWidgets && (
+          <KPI icon="⚠️" label="Low Stock Alerts" value={stats?.lowStock||0} sub="Need restocking" color={stats?.lowStock>0?'#EF4444':'#10B981'} />
+        )}
+        {showFinanceWidgets && (
+          <KPI icon="💸" label="Month Expenses" value={fmt(stats?.monthExpenses)} sub="Operating costs this month" color="#EF4444" />
+        )}
+        {showInvestorWidgets && (
+          <KPI icon="🏦" label="Total Invested" value={fmt(stats?.totalInvested)} sub="Capital and funding tracked" color="#06B6D4" />
+        )}
       </div>
 
       {/* Charts */}
@@ -103,7 +113,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Low stock */}
-      {lowStock.length>0 && (
+            {showInventoryWidgets && lowStock.length>0 && (
         <div className="card" style={{ borderColor:'rgba(239,68,68,.3)', background:'rgba(239,68,68,.04)' }}>
           <h2 style={{ fontWeight:700, fontSize:15, marginBottom:12, color:'var(--danger)' }}>⚠️ Low Stock Alerts ({lowStock.length})</h2>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:9 }}>

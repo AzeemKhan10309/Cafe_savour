@@ -2,15 +2,7 @@ import React, { useState, createContext, useContext, useEffect, useMemo } from '
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage    from './pages/LoginPage';
 import Layout       from './components/Layout';
-import POSPage      from './pages/POSPage';
-import DashboardPage from './pages/DashboardPage';
-import InventoryPage from './pages/InventoryPage';
-import StaffPage    from './pages/StaffPage';
-import ReportsPage  from './pages/ReportsPage';
-import FinancePage  from './pages/FinancePage';
-import InvestmentsPage from './pages/InvestmentsPage';
-import KitchenInventoryPage from './pages/KitchenInventoryPage';
-import PrinterSettingsPage from './pages/PrinterSettingsPage';
+import { MODULES, featureRouteElement } from './config/modules';
 const { BUSINESS_INFO } = require('../shared/businessInfo');
 export const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
@@ -109,17 +101,17 @@ export default function App() {
 
           {/* Authenticated layout */}
           <Route path="/" element={user ? <Layout /> : <Navigate to="/login" replace />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="pos"       element={<POSPage />} />
-            <Route path="inventory" element={<InventoryPage />} />
+            {MODULES.map(module => {
+              const element = module.adminOnly ? <AdminOnly>{module.element}</AdminOnly> : module.element;
+              const protectedElement = featureRouteElement(module, element);
 
-            {/* Admin-only pages */}
-            <Route path="kitchen-inventory" element={<AdminOnly><KitchenInventoryPage /></AdminOnly>} />
-            <Route path="reports" element={<AdminOnly><ReportsPage /></AdminOnly>} />
-            <Route path="finance" element={<AdminOnly><FinancePage /></AdminOnly>} />
-            <Route path="investments" element={<AdminOnly><InvestmentsPage /></AdminOnly>} />
-            <Route path="staff"   element={<AdminOnly><StaffPage /></AdminOnly>} />
-                        <Route path="printer-settings" element={<AdminOnly><PrinterSettingsPage /></AdminOnly>} />
+              if (module.index) {
+                return <Route key={module.key} index element={protectedElement} />;
+              }
+
+              return <Route key={module.key} path={module.path} element={protectedElement} />;
+            })}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
 
           <Route path="*" element={<Navigate to={user ? '/' : '/login'} replace />} />

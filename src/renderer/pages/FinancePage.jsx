@@ -37,6 +37,48 @@ function StatCard({ icon, label, value, sub, color }) {
   );
 }
 
+function ExpenseListView({ expenses, categories, onEdit, onDelete, fmt }) {
+  const catMap = useMemo(() => Object.fromEntries(categories.map(c => [c.id, c])), [categories]);
+  const sorted = useMemo(() => [...expenses].sort((a, b) => new Date(b.expense_date) - new Date(a.expense_date)), [expenses]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {sorted.map(e => {
+        const cat = catMap[e.category_id] || {};
+        return (
+          <div key={e.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: `${cat.color || '#64748B'}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+              {cat.icon || '📄'}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 800, fontSize: 15, color: '#fff' }}>{e.item_name}</span>
+                <span className="badge" style={{ color: cat.color || '#94A3B8', background: `${cat.color || '#94A3B8'}22`, fontSize: 11, fontWeight: 700 }}>{cat.name || 'Uncategorized'}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{e.expense_date}</span>
+                {e.notes && <span style={{ fontSize: 12, color: 'var(--text-dim)', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.notes}</span>}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 16, color: '#fff' }}>{fmt(e.amount)}</div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => onEdit(e)}>Edit</button>
+                <button className="btn btn-danger btn-sm" onClick={() => onDelete(e)}>Delete</button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {!sorted.length && (
+        <div className="card" style={{ padding: 36, textAlign: 'center', color: 'var(--text-dim)' }}>
+          No expenses for the selected period.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExpenseModal({ expense, categories, onSave, onClose }) {
   const [form, setForm] = useState(expense || { item_name: '', amount: '', category_id: categories[0]?.id || '', expense_date: today(), notes: '' });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -92,6 +134,7 @@ export default function FinancePage() {
     const [investors, setInvestors] = useState([]);
   const [editingExpense, setEditingExpense] = useState(null);
   const [editingInvestment, setEditingInvestment] = useState(null);
+  const [expenseView, setExpenseView] = useState('charts'); // 'charts' | 'list'
 
   useEffect(() => { load(); }, []); // eslint-disable-line
 
@@ -184,11 +227,22 @@ export default function FinancePage() {
 
       {loading ? <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Loading finance data...</div> : tab === 'expenses' ? (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div className="card"><h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Category-wise Breakdown</h3><ResponsiveContainer width="100%" height={230}><PieChart><Pie data={expenseSummary.categories} dataKey="total" nameKey="name" innerRadius={52} outerRadius={82}>{expenseSummary.categories.map(c => <Cell key={c.name} fill={c.color} />)}</Pie><Tooltip formatter={v => fmt(v)} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }} /></PieChart></ResponsiveContainer></div>
-            <div className="card"><h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Daily Expenses</h3><ResponsiveContainer width="100%" height={230}><BarChart data={[...expenseSummary.daily].reverse()}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)" /><XAxis dataKey="period" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} /><YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} /><Tooltip formatter={v => fmt(v)} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }} /><Bar dataKey="total" fill="#EF4444" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button className={`btn btn-sm ${expenseView === 'charts' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setExpenseView('charts')}>📊 Charts</button>
+            <button className={`btn btn-sm ${expenseView === 'list' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setExpenseView('list')}>📝 List</button>
           </div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}><table className="table"><thead><tr><th>Date</th><th>Item</th><th>Category</th><th>Notes</th><th>Amount</th><th>Actions</th></tr></thead><tbody>{expenses.map(e => <tr key={e.id}><td>{e.expense_date}</td><td style={{ fontWeight: 700 }}>{e.item_name}</td><td><span className="badge" style={{ color: e.category_color, background: `${e.category_color}22` }}>{e.category_name}</span></td><td style={{ color: 'var(--text-muted)' }}>{e.notes || '—'}</td><td style={{ fontFamily: 'monospace', fontWeight: 800 }}>{fmt(e.amount)}</td><td><button className="btn btn-ghost btn-sm" onClick={() => setEditingExpense(e)}>Edit</button> <button className="btn btn-danger btn-sm" onClick={() => removeExpense(e)}>Delete</button></td></tr>)}</tbody></table>{!expenses.length && <div style={{ padding: 36, textAlign: 'center', color: 'var(--text-dim)' }}>No expenses for selected period.</div>}</div>
+
+          {expenseView === 'charts' ? (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div className="card"><h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Category-wise Breakdown</h3><ResponsiveContainer width="100%" height={230}><PieChart><Pie data={expenseSummary.categories} dataKey="total" nameKey="name" innerRadius={52} outerRadius={82}>{expenseSummary.categories.map(c => <Cell key={c.name} fill={c.color} />)}</Pie><Tooltip formatter={v => fmt(v)} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }} /></PieChart></ResponsiveContainer></div>
+                <div className="card"><h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Daily Expenses</h3><ResponsiveContainer width="100%" height={230}><BarChart data={[...expenseSummary.daily].reverse()}><CartesianGrid strokeDasharray="3 3" stroke="var(--border)" /><XAxis dataKey="period" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} /><YAxis tickFormatter={v => `${(v / 1000).toFixed(0)}k`} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} /><Tooltip formatter={v => fmt(v)} contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }} /><Bar dataKey="total" fill="#EF4444" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>
+              </div>
+              <div className="card" style={{ padding: 0, overflow: 'hidden' }}><table className="table"><thead><tr><th>Date</th><th>Item</th><th>Category</th><th>Notes</th><th>Amount</th><th>Actions</th></tr></thead><tbody>{expenses.map(e => <tr key={e.id}><td>{e.expense_date}</td><td style={{ fontWeight: 700 }}>{e.item_name}</td><td><span className="badge" style={{ color: e.category_color, background: `${e.category_color}22` }}>{e.category_name}</span></td><td style={{ color: 'var(--text-muted)' }}>{e.notes || '—'}</td><td style={{ fontFamily: 'monospace', fontWeight: 800 }}>{fmt(e.amount)}</td><td><button className="btn btn-ghost btn-sm" onClick={() => setEditingExpense(e)}>Edit</button> <button className="btn btn-danger btn-sm" onClick={() => removeExpense(e)}>Delete</button></td></tr>)}</tbody></table>{!expenses.length && <div style={{ padding: 36, textAlign: 'center', color: 'var(--text-dim)' }}>No expenses for selected period.</div>}</div>
+            </>
+          ) : (
+            <ExpenseListView expenses={expenses} categories={categories} onEdit={setEditingExpense} onDelete={removeExpense} fmt={fmt} />
+          )}
         </>
       ) : (
         <>

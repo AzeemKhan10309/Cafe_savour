@@ -6,7 +6,8 @@ const printerSettings = require('./printerSettingsService');
 const { BUSINESS_INFO } = require('../../shared/businessInfo');
 const LOG_PREFIX = '[PrinterService]';
 const MAX_PRINT_ATTEMPTS = 3;
-
+const ESC = '\x1B';
+const GS = '\x1D';
 // ─── PRINT LOCK (QUEUE SYSTEM) ───────────────────────────────────────────────
 let _printLock = false;
 const _queue = [];
@@ -288,7 +289,7 @@ function printRaw(printerName, text) {
     const tempFile = path.join(os.tmpdir(), `receipt_${process.pid}_${Date.now()}.bin`);
     const psFile = path.join(os.tmpdir(), `receipt_print_${process.pid}_${Date.now()}.ps1`);
 
-    const ESC = '\x1B';
+  
     
     // ESC/POS command sequence: initialize, center, receipt content, feed, and cut.
     const data =
@@ -437,8 +438,7 @@ const business = getReceiptBusinessInfo(cafe);
   const line = '='.repeat(RECEIPT_WIDTH);
   const dash = '-'.repeat(RECEIPT_WIDTH);
 
-  const ESC = '\x1B';
-   const CENTER = ESC + 'a' + '\x01';
+  const CENTER = ESC + 'a' + '\x01';
   const LEFT = ESC + 'a' + '\x00';
   const BOLD_ON = ESC + 'E' + '\x01';
   const BOLD_OFF = ESC + 'E' + '\x00';

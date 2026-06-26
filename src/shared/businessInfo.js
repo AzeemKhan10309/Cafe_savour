@@ -1,12 +1,12 @@
 const BUSINESS_INFO = {
-  name: 'EAT & MEET CAFE',
-  phone: '+92 331 4566600',
-  address: '19 KM Sheikhupura Lahore Road, Opposite PSO Petrol Pump',
+  name: 'Saudi Saver House',
+  phone: '+92 3466262146',
+  address: 'Sargodha Rd, Mangowal Garbi',
   addressLines: [
-    '19 KM Sheikhupura Lahore Road',
-    'Opposite PSO Petrol Pump',
+    'Sargodha Rd, Mangowal Garbi',
+
   ],
-  footer: 'Thank you for visiting EAT & MEET CAFE!',
+  footer: 'Thank you for visiting Saudi Saver House',
 };
 
 module.exports = { BUSINESS_INFO };
