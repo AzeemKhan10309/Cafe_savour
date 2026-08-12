@@ -102,6 +102,8 @@ function createTables() {
       tax_rate REAL DEFAULT 0,
       tax_amount REAL DEFAULT 0,
       total REAL NOT NULL,
+      service_rate REAL DEFAULT 0,
+      service_amount REAL DEFAULT 0,
       payment_method TEXT DEFAULT 'cash',
       payment_details TEXT DEFAULT '{}',
       notes TEXT,
@@ -288,7 +290,9 @@ function createTables() {
   `);
 }
 function migrateSchema() {
-  addColumnIfMissing('orders', 'table_name', "TEXT DEFAULT ''");
+    addColumnIfMissing('orders', 'table_name', "TEXT DEFAULT ''");
+    addColumnIfMissing('orders', 'service_rate', 'REAL DEFAULT 0');
+    addColumnIfMissing('orders', 'service_amount', 'REAL DEFAULT 0');
     addColumnIfMissing('investors', 'expected_monthly_amount', 'REAL DEFAULT 0');
   addColumnIfMissing('investors', 'active', 'INTEGER DEFAULT 1');
   addColumnIfMissing('investments', 'investor_id', 'INTEGER REFERENCES investors(id) ON DELETE SET NULL');
@@ -1191,8 +1195,8 @@ function createOrder(data) {
   const tx = db.transaction(d => {
     const r = db.prepare(`
       INSERT INTO orders 
-     (invoice_number,staff_id,table_name,subtotal,discount,discount_type,tax_rate,tax_amount,total,payment_method,payment_details,notes) 
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+ (invoice_number,staff_id,table_name,subtotal,discount,discount_type,tax_rate,tax_amount,service_rate,service_amount,total,payment_method,payment_details,notes) 
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
       d.invoice_number,
       d.staff_id,
@@ -1202,6 +1206,8 @@ function createOrder(data) {
       d.discount_type||'flat',
       d.tax_rate||0,
       d.tax_amount||0,
+      d.service_rate||0,
+      d.service_amount||0,
       d.total,
       d.payment_method,
       JSON.stringify(d.payment_details||{}),

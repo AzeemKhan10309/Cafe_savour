@@ -803,8 +803,46 @@ finally {
 }
 
 // ─── RECEIPT FORMAT ──────────────────────────────────────────────────────────
+//
+// Layout target (matches reference receipt image):
+//
+//   ============================================
+//                  CAFE AROMA
+//              23, Green Park Road
+//               Bangalore - 560001
+//                Ph: 080-12345678
+//   ============================================
+//   Invoice: #1024
+//   Date: 12-Aug-2026 18:30
+//   Table: T-04
+//   --------------------------------------------
+//   ITEM               QTY     RATE      AMT
+//   Cappuccino           2   150.00   300.00
+//   Veg Sandwich         1   180.00   180.00
+//   Blueberry Muffin     1   220.00   220.00
+//   --------------------------------------------
+//   Subtotal                           700.00
+//   Discount                           -12.00
+//   Service Tax 8%                      55.00
+//   TOTAL                              743.00
+//   --------------------------------------------
+//   Order Notes: less sugar
+//   --------------------------------------------
+//               Thank You! Visit Again
+//
+// 42-column width, matching an 80mm thermal printer.
 
-const RECEIPT_WIDTH = 32;
+const RECEIPT_WIDTH = 42;
+
+// Item table column widths (sum + separating spaces = RECEIPT_WIDTH)
+const ITEM_COL = 18;
+const QTY_COL = 5;
+const RATE_COL = 8;
+const AMT_COL = 8;
+
+// Footer summary column widths
+const SUMMARY_LABEL_WIDTH = 30;
+const SUMMARY_AMOUNT_WIDTH = 12;
 
 function centerText(
   value,
@@ -826,6 +864,26 @@ function centerText(
     ' '.repeat(left) +
     text
   );
+}
+
+function padRight(value, width) {
+  const text = String(value ?? '');
+
+  if (text.length >= width) {
+    return text.slice(0, width);
+  }
+
+  return text.padEnd(width, ' ');
+}
+
+function padLeft(value, width) {
+  const text = String(value ?? '');
+
+  if (text.length >= width) {
+    return text.slice(-width);
+  }
+
+  return text.padStart(width, ' ');
 }
 
 function wrapReceiptLine(
@@ -925,6 +983,12 @@ function wrapReceiptLine(
   return lines;
 }
 
+// ─── MONEY ────────────────────────────────────────────────────────────────────
+
+function moneyFmt(value) {
+  return parseFloat(value || 0).toFixed(2);
+}
+
 // ─── ORDER NOTES ─────────────────────────────────────────────────────────────
 
 function formatOrderNotes(notes) {
@@ -936,17 +1000,29 @@ function formatOrderNotes(notes) {
     return [];
   }
 
-  const noteLines =
-    cleanNotes
-      .split(/\r?\n/)
-      .flatMap((line) =>
-        wrapReceiptLine(line)
+  const prefix = 'Order Notes: ';
+
+  const wrapped =
+    wrapReceiptLine(
+      cleanNotes,
+      RECEIPT_WIDTH - prefix.length
+    );
+
+  const firstLine =
+    prefix + (wrapped[0] || '');
+
+  const restLines =
+    wrapped
+      .slice(1)
+      .map(
+        (line) =>
+          ' '.repeat(prefix.length) + line
       );
 
   return [
     '-'.repeat(RECEIPT_WIDTH),
-    'Order Notes:',
-    ...noteLines
+    firstLine,
+    ...restLines
   ];
 }
 
@@ -976,8 +1052,6 @@ function getReceiptBusinessInfo(
 
 // ─── FORMAT RECEIPT ──────────────────────────────────────────────────────────
 
-// ─── FORMAT RECEIPT ──────────────────────────────────────────────────────────
-
 function formatReceipt(data) {
 
   const {
@@ -998,7 +1072,6 @@ function formatReceipt(data) {
     serviceRate = 0,
     serviceAmount = 0,
     total,
-    paymentMethod,
     date,
 
     // Order notes
@@ -1012,8 +1085,14 @@ function formatReceipt(data) {
   const line =
     '='.repeat(RECEIPT_WIDTH);
 
+  const dashedLine =
+    '-'.repeat(RECEIPT_WIDTH);
+
   const CENTER =
     ESC + 'a' + '\x01';
+
+  const LEFT =
+    ESC + 'a' + '\x00';
 
   const BOLD_ON =
     ESC + 'E' + '\x01';
@@ -1021,82 +1100,7 @@ function formatReceipt(data) {
   const BOLD_OFF =
     ESC + 'E' + '\x00';
 
-  // ─── CENTER TEXT ───────────────────────────────────────────────────────────
-
-  const centerText = (
-    value,
-    width = RECEIPT_WIDTH
-  ) => {
-
-    const text =
-      String(value || '').trim();
-
-    if (text.length >= width) {
-      return text;
-    }
-
-    const left =
-      Math.floor(
-        (width - text.length) / 2
-      );
-
-    return (
-      ' '.repeat(left) +
-      text
-    );
-  };
-
-  // ─── MONEY ─────────────────────────────────────────────────────────────────
-
-  const money = (value) =>
-    parseFloat(value || 0).toFixed(0);
-
-  // ─── SUMMARY ALIGNMENT ─────────────────────────────────────────────────────
-  //
-  // Receipt width = 32 characters
-  //
-  // Example:
-  //
-  // Subtotal             :      700
-  // Discount (3%)        :      -21
-  // Service Tax (5%)     :       34
-  // VAT Tax (5%)         :       34
-  // Total                :      747
-  //
-  // Label + spaces + ":" + spaces + amount
-  // Colon is ALWAYS at the same position.
-  // Amount is ALWAYS right aligned.
-
-  const SUMMARY_LABEL_WIDTH = 20;
-  const SUMMARY_AMOUNT_WIDTH = 8;
-
-  const summaryLine = (
-    label,
-    value
-  ) => {
-
-    const cleanLabel =
-      String(label || '').trim();
-
-    const cleanValue =
-      String(value ?? '').trim();
-
-    const labelPart =
-      cleanLabel
-        .padEnd(SUMMARY_LABEL_WIDTH, ' ');
-
-    const amountPart =
-      cleanValue
-        .padStart(SUMMARY_AMOUNT_WIDTH, ' ');
-
-    return (
-      labelPart +
-      ' : ' +
-      amountPart
-    );
-  };
-
-  // ─── RECEIPT HEADER ────────────────────────────────────────────────────────
+  // ─── RECEIPT HEADER (centered business info) ──────────────────────────────
 
   const header = [
 
@@ -1104,69 +1108,81 @@ function formatReceipt(data) {
 
     line,
 
-    `${BOLD_ON}${business.name}${BOLD_OFF}`,
-
-    business.phone,
+    `${BOLD_ON}${centerText(business.name)}${BOLD_OFF}`,
 
     ...business.addressLines.map(
       (addressLine) =>
         centerText(addressLine)
     ),
 
+    centerText(`Ph: ${business.phone}`),
+
     line,
 
-    centerText(
-      `Invoice : ${invoice}`
-    ),
+    LEFT,
+
+    `Invoice: ${invoice}`,
+
+    `Date: ${date}`,
 
     // Table number
     (tableNo || tableName)
-      ? centerText(
-          `Table No : ${
-            tableNo || tableName
-          }`
-        )
+      ? `Table: ${tableNo || tableName}`
       : '',
 
-    centerText(
-      `Date : ${date}`
-    ),
+    dashedLine
 
-    centerText(
-      `Payment : ${
-        paymentMethod?.toUpperCase()
-      }`
-    ),
+  ].filter((l) => l !== '');
 
-    line
+  // ─── ITEMS TABLE ────────────────────────────────────────────────────────────
 
-  ].filter(Boolean);
-
-  // ─── ITEMS ─────────────────────────────────────────────────────────────────
+  const itemTableHeader =
+    padRight('ITEM', ITEM_COL) + ' ' +
+    padLeft('QTY', QTY_COL) + ' ' +
+    padLeft('RATE', RATE_COL) + ' ' +
+    padLeft('AMT', AMT_COL);
 
   const itemLines =
-    items.flatMap((item) => [
+    items.flatMap((item) => {
 
-      centerText(
-        `${item.product_name.substring(
-          0,
-          20
-        )}`
-      ),
+      const nameLines =
+        wrapReceiptLine(
+          item.product_name,
+          ITEM_COL
+        );
 
-      centerText(
-        `${item.quantity} x ${money(
-          item.price
-        )} = ${money(
-          item.subtotal
-        )}`
-      ),
+      const firstLine =
+        padRight(nameLines[0] || '', ITEM_COL) + ' ' +
+        padLeft(item.quantity, QTY_COL) + ' ' +
+        padLeft(moneyFmt(item.price), RATE_COL) + ' ' +
+        padLeft(moneyFmt(item.subtotal), AMT_COL);
 
-      ''
+      const extraLines =
+        nameLines
+          .slice(1)
+          .map(
+            (nameLine) =>
+              padRight(nameLine, ITEM_COL)
+          );
 
-    ]);
+      return [firstLine, ...extraLines];
+    });
 
-  // ─── DISCOUNT LABEL ────────────────────────────────────────────────────────
+  // ─── SUMMARY / FOOTER ───────────────────────────────────────────────────────
+
+  const summaryLine = (label, value) => {
+
+    const cleanLabel =
+      String(label || '').trim();
+
+    const cleanValue =
+      String(value ?? '').trim();
+
+    return (
+      padRight(cleanLabel, SUMMARY_LABEL_WIDTH) +
+      padLeft(cleanValue, SUMMARY_AMOUNT_WIDTH)
+    );
+  };
 
   const discountLabel =
     discountType === 'percent'
@@ -1175,63 +1191,64 @@ function formatReceipt(data) {
         ).toFixed(0)}%)`
       : 'Discount';
 
-  // ─── SUMMARY / FOOTER ──────────────────────────────────────────────────────
-
   const footer = [
 
-    line,
+    dashedLine,
 
     // Subtotal
     summaryLine(
       'Subtotal',
-      money(subtotal)
+      moneyFmt(subtotal)
     ),
 
     // Discount
     discountAmount > 0
       ? summaryLine(
           discountLabel,
-          `-${money(discountAmount)}`
+          `-${moneyFmt(discountAmount)}`
         )
       : '',
 
     // Service Tax
     serviceAmount > 0
       ? summaryLine(
-          `Service Tax (${parseFloat(
+          `Service Tax ${parseFloat(
             serviceRate || 0
-          ).toFixed(0)}%)`,
-          money(serviceAmount)
+          ).toFixed(0)}%`,
+          moneyFmt(serviceAmount)
         )
       : '',
 
     // VAT Tax
     taxAmount > 0
       ? summaryLine(
-          `VAT Tax (${parseFloat(
+          `VAT Tax ${parseFloat(
             taxRate || 0
-          ).toFixed(0)}%)`,
-          money(taxAmount)
+          ).toFixed(0)}%`,
+          moneyFmt(taxAmount)
         )
       : '',
 
     // Total
-    summaryLine(
-      'Total',
-      money(total)
-    ),
+    `${BOLD_ON}${summaryLine(
+      'TOTAL',
+      moneyFmt(total)
+    )}${BOLD_OFF}`,
 
     // Order Notes
     ...formatOrderNotes(notes),
 
-    line,
+    dashedLine,
 
-    `${BOLD_ON}Thank You Visit Again!${BOLD_OFF}`
+    CENTER,
+
+    `${BOLD_ON}Thank You! Visit Again${BOLD_OFF}`
 
   ].filter(Boolean);
 
   return [
     ...header,
+    itemTableHeader,
     ...itemLines,
     ...footer
   ].join('\n');
@@ -1385,8 +1402,6 @@ async function testPrint() {
     subtotal: 0,
 
     total: 0,
-
-    paymentMethod: 'test',
 
     date:
       new Date().toLocaleString()

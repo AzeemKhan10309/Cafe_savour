@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../App';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-const { BUSINESS_INFO } = require('../../shared/businessInfo');
+import { buildReceiptDataFromOrder } from '../utils/receiptData';
 const fmt = v => `Rs. ${Number(v||0).toLocaleString('en-PK',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
 
 const PRESETS = [
@@ -58,27 +58,7 @@ async function handleReprintOrder(order) {
     const fullOrder = await window.api.getOrderById(order.id);
     if (!fullOrder) return showToast('Order not found', 'error');
 
-    const result = await window.api.printReceipt({
-      cafe: BUSINESS_INFO,
-      invoice: fullOrder.invoice_number,
-      items: fullOrder.items || [],
-      tableName: fullOrder.table_name || '',
-      subtotal: fullOrder.subtotal,
-      discount: fullOrder.discount,
-      discountAmount: fullOrder.discount_type === 'percent'
-        ? Math.min(Number(fullOrder.subtotal || 0) * Number(fullOrder.discount || 0) / 100, Number(fullOrder.subtotal || 0))
-        : Math.min(Number(fullOrder.discount || 0), Number(fullOrder.subtotal || 0)),
-      discountType: fullOrder.discount_type,
-      taxRate: fullOrder.tax_rate,
-      taxAmount: fullOrder.tax_amount,
-      serviceRate: fullOrder.service_rate,
-      serviceAmount: fullOrder.service_amount,
-      total: fullOrder.total,
-      paymentMethod: fullOrder.payment_method,
-      staffName: fullOrder.staff_name,
-      date: new Date(fullOrder.created_at).toLocaleString('en-PK'),
-       notes: fullOrder.notes || '',
-    });
+      const result = await window.api.printReceipt(buildReceiptDataFromOrder(fullOrder));
 
     if (result?.success) showToast(`Receipt ${fullOrder.invoice_number} reprinted`);
     else showToast(result?.message || 'Reprint failed', 'error');

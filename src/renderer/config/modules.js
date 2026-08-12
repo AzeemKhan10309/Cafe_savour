@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import POSPage from '../pages/POSPage';
+import OrderListPage from '../pages/OrderListPage';
 import DashboardPage from '../pages/DashboardPage';
 import InventoryPage from '../pages/InventoryPage';
 import StaffPage from '../pages/StaffPage';
@@ -32,6 +33,16 @@ export const MODULES = [
     nav: true,
     adminOnly: false,
     element: <POSPage />,
+  },
+  {
+    key: 'ORDER_LIST',
+    path: 'orders',
+    navPath: '/orders',
+    label: 'Order List',
+    icon: '🧾',
+    nav: true,
+    adminOnly: false,
+    element: <OrderListPage />,
   },
   {
     key: 'INVENTORY',
