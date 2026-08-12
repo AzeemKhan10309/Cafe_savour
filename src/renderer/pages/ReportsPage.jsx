@@ -77,6 +77,7 @@ async function handleReprintOrder(order) {
       paymentMethod: fullOrder.payment_method,
       staffName: fullOrder.staff_name,
       date: new Date(fullOrder.created_at).toLocaleString('en-PK'),
+       notes: fullOrder.notes || '',
     });
 
     if (result?.success) showToast(`Receipt ${fullOrder.invoice_number} reprinted`);

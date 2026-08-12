@@ -175,6 +175,7 @@ export default function POSPage() {
         paymentMethod:payMethod, paymentDetails: payMethod==='split'?splitAmt:{},
         cashGiven:parseFloat(cashGiven)||0, staffName:user.name,
         date:new Date().toLocaleString('en-PK'),
+         notes,
       });
 
       const printedOnDevice     = printResult?.success && !printResult?.simulated;
@@ -315,8 +316,15 @@ export default function POSPage() {
   {/* Halls */}
   <option value="Main Hall">Main Hall</option>
     <option value="Sitting Hall">Sitting Hall</option>
-</select>          <input className="input" placeholder="Order notes…" value={notes} onChange={e=>setNotes(e.target.value)} style={{ fontSize:12 }} />
-          <div style={{ background:'var(--bg)', borderRadius:10, padding:12 }}>
+</select>
+          <textarea
+            className="input"
+            placeholder="Order notes…"
+            value={notes}
+            onChange={e=>setNotes(e.target.value)}
+            rows={3}
+            style={{ fontSize:12, resize:'vertical' }}
+          />          <div style={{ background:'var(--bg)', borderRadius:10, padding:12 }}>
             <TRow label="Subtotal" value={subtotal} />
             {discountAmount>0 && <TRow label={`Discount${discount.type==='percent'?` (${discount.value}%)`:''}` } value={-discountAmount} color="var(--success)" />}
             {serviceAmount>0 && <TRow label={`Service Charge (${serviceRate}%)`} value={serviceAmount} color="#fbbf24" />}
