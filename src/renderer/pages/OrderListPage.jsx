@@ -1,11 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../App';
 import { buildReceiptDataFromOrder } from '../utils/receiptData';
-
+import { formatOrderDateTime, formatOrderTime, todayOrderKey } from '../utils/orderDateTime';
 const fmt = v => `Rs. ${Number(v || 0).toLocaleString('en-PK', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-const todayKey = () => new Date().toISOString().split('T')[0];
-const fmtTime = value => value ? new Date(value).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }) : '—';
-const fmtDateTime = value => value ? new Date(value).toLocaleString('en-PK') : '—';
+
 
 function DetailRow({ label, value, strong, color }) {
   return <div style={{ display:'flex', justifyContent:'space-between', gap:16, padding:'5px 0', color:color || 'inherit' }}><span style={{ color:'var(--text-muted)', fontSize:13 }}>{label}</span><span style={{ fontWeight:strong ? 800 : 600, textAlign:'right' }}>{value}</span></div>;
@@ -61,14 +59,14 @@ export default function OrderListPage() {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(null);
   const [printingId, setPrintingId] = useState(null);
-  const today = todayKey();
+   const today = todayOrderKey();
 
   useEffect(() => { loadTodayOrders(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadTodayOrders() {
     setLoading(true);
-    const rows = await window.api.getOrders({ start_date:today, end_date:today });
-    setOrders(rows || []);
+    const rows = await window.api.getOrders({ start_date:today, end_date:today, use_local_date:true });
+        setOrders(rows || []);
     setLoading(false);
   }
 
@@ -99,8 +97,7 @@ export default function OrderListPage() {
 
       <div className="card" style={{ padding:0, overflow:'hidden' }}>
         <table className="table"><thead><tr><th>Order</th><th>Time</th><th>Table</th><th>Items</th><th>Discount</th><th>Total</th><th>Payment</th><th>Action</th></tr></thead><tbody>
-          {orders.map(order => <tr key={order.id}><td><strong>{order.invoice_number}</strong><div style={{ color:'var(--text-dim)', fontSize:11 }}>{fmtDateTime(order.created_at)}</div></td><td>{fmtTime(order.created_at)}</td><td>{order.table_name || '—'}</td><td>View</td><td>{fmt(order.discount)}</td><td><strong>{fmt(order.total)}</strong></td><td style={{ textTransform:'capitalize' }}>{order.payment_method}</td><td><div style={{ display:'flex', gap:8, flexWrap:'wrap' }}><button className="btn btn-sm btn-ghost" onClick={() => viewOrder(order)}>View Order</button><button className="btn btn-sm btn-primary" onClick={() => printOrder(order)} disabled={printingId === order.id}>{printingId === order.id ? 'Printing…' : 'Print Receipt'}</button></div></td></tr>)}
-        </tbody></table>
+ {orders.map(order => <tr key={order.id}><td><strong>{order.invoice_number}</strong><div style={{ color:'var(--text-dim)', fontSize:11 }}>{formatOrderDateTime(order.created_at)}</div></td><td>{formatOrderTime(order.created_at)}</td><td>{order.table_name || '—'}</td><td>View</td><td>{fmt(order.discount)}</td><td><strong>{fmt(order.total)}</strong></td><td style={{ textTransform:'capitalize' }}>{order.payment_method}</td><td><div style={{ display:'flex', gap:8, flexWrap:'wrap' }}><button className="btn btn-sm btn-ghost" onClick={() => viewOrder(order)}>View Order</button><button className="btn btn-sm btn-primary" onClick={() => printOrder(order)} disabled={printingId === order.id}>{printingId === order.id ? 'Printing…' : 'Print Receipt'}</button></div></td></tr>)}        </tbody></table>
         {!orders.length && <div style={{ textAlign:'center', padding:46, color:'var(--text-dim)' }}>{loading ? 'Loading today’s orders…' : 'No orders created today'}</div>}
       </div>
 

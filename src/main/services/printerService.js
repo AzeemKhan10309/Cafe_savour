@@ -1108,14 +1108,11 @@ function formatReceipt(data) {
 
     line,
 
-    `${BOLD_ON}${centerText(business.name)}${BOLD_OFF}`,
+    `${BOLD_ON}${business.name}${BOLD_OFF}`,
 
-    ...business.addressLines.map(
-      (addressLine) =>
-        centerText(addressLine)
-    ),
+    ...business.addressLines,
 
-    centerText(`Ph: ${business.phone}`),
+    `Ph: ${business.phone}`,
 
     line,
 

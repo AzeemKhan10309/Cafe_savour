@@ -1,5 +1,5 @@
 const { BUSINESS_INFO } = require('../../shared/businessInfo');
-
+import { formatOrderDateTime } from './orderDateTime';
 export function calculateDiscountAmount(order) {
   const subtotal = Number(order?.subtotal || 0);
   const discount = Number(order?.discount || 0);
@@ -38,7 +38,7 @@ export function buildReceiptDataFromOrder(order) {
     paymentMethod: order.payment_method,
     paymentDetails,
     staffName: order.staff_name,
-    date: new Date(order.created_at).toLocaleString('en-PK'),
+    date: formatOrderDateTime(order.created_at),
     notes: order.notes || '',
   };
 }

@@ -1238,8 +1238,9 @@ deductRecipesForOrder(oid, d.items, d.staff_name || 'POS');
 function getOrders(f={}) {
   let q = 'SELECT o.*, s.name as staff_name FROM orders o LEFT JOIN staff s ON o.staff_id=s.id WHERE 1=1';
   const p=[];
-  if(f.start_date){q+=' AND DATE(o.created_at)>=?';p.push(f.start_date);}
-  if(f.end_date)  {q+=' AND DATE(o.created_at)<=?';p.push(f.end_date);}
+   const orderDateExpr = f.use_local_date ? "DATE(datetime(o.created_at,'localtime'))" : 'DATE(o.created_at)';
+  if(f.start_date){q+=` AND ${orderDateExpr}>=?`;p.push(f.start_date);}
+  if(f.end_date)  {q+=` AND ${orderDateExpr}<=?`;p.push(f.end_date);}
   if(f.payment_method){q+=' AND o.payment_method=?';p.push(f.payment_method);}
   q+=' ORDER BY o.created_at DESC';
   if(f.limit){q+=' LIMIT ?';p.push(f.limit);}
